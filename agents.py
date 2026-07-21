@@ -5,10 +5,10 @@ from crewai import Agent, Task, Crew, Process
 from datetime import datetime
 
 # ============ LOAD SECRETS ============
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+#GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 NOTION_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DB_ID = os.getenv("NOTION_DATABASE_ID")
-os.environ["GEMINI_API_KEY"] = GEMINI_KEY
+   os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
 
 # ============ KAHAANI AI BRAND CONTEXT ============
 BRAND_CONTEXT = """
@@ -137,7 +137,7 @@ trend_researcher = Agent(
     {BRAND_CONTEXT}
     You identify topics that will attract parents searching for bedtime story ideas, 
     multilingual education tips, and screen-free activities for kids.""",
-    llm="gemini/gemini-2.0-flash",
+       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
@@ -148,17 +148,17 @@ blog_writer = Agent(
     {BRAND_CONTEXT}
     You write blog posts that feel like advice from a trusted friend — warm, practical, 
     and culturally aware. You naturally weave in how Kahani AI can help parents.""",
-    llm="gemini/gemini-2.0-flash",
+       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
 seo_optimizer = Agent(
-    role="SEO Specialist for Parenting Niche",
-    goal="Create perfect slugs, meta descriptions, and keywords that rank in Google",
-    backstory="""You are an SEO expert who specializes in parenting and education blogs.
+    role="SEO and GEO Specialist for Parenting Niche",
+    goal="Create perfect slugs, meta descriptions, and keywords that rank in Google and structured data to rank in AI search engines",
+    backstory="""You are an SEO and GEO expert who specializes in parenting and education blogs.
     You create keyword-rich slugs, compelling meta descriptions (under 160 chars), 
-    and strategic keyword lists that help blogs rank on Google.""",
-    llm="gemini/gemini-2.0-flash",
+    and strategic keyword lists and structured data that help blogs rank on Google and Generative AI engines.""",
+       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
@@ -174,7 +174,7 @@ ceo_reviewer = Agent(
     - Aligned with Kahani AI's warm, trustworthy voice
     You reject anything that feels salesy, inappropriate, or low-quality.
     {BRAND_CONTEXT}""",
-    llm="gemini/gemini-2.0-flash",
+       llm="openrouter/meta-llama/llama-3.3-70b-instruct"",
     verbose=True
 )
 
@@ -187,7 +187,7 @@ social_strategist = Agent(
     - Facebook = parenting communities, longer storytelling posts
     - YouTube = tutorials, story previews, parenting tips
     You pick the best platforms and angles for each blog.""",
-    llm="gemini/gemini-2.0-flash",
+       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
@@ -197,7 +197,7 @@ content_creator = Agent(
     backstory="""You are a social media expert who creates viral content for parenting brands.
     You write posts that make parents stop scrolling, feel emotional, and want to try Kahani AI.
     You use emojis, hooks, and storytelling techniques that work on each platform.""",
-    llm="gemini/gemini-2.0-flash",
+       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
@@ -206,7 +206,7 @@ poster = Agent(
     goal="Format the final approved content for publishing across platforms",
     backstory="""You are the final step in the content pipeline. You take approved content 
     and format it perfectly for each social platform, ready to be posted.""",
-    llm="gemini/gemini-2.0-flash",
+       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
