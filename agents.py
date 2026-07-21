@@ -125,7 +125,7 @@ def log_to_notion(blog_title, agent_output):
     }
     requests.post(url, headers=notion_headers(), json=payload)
 
-# ============ DEFINE THE 7 AUTONOMOUS AGENTS ============
+# ============ DEFINE THE 7 AUTONOMOUS AGENTS (100% FREE MODELS) ============
 
 trend_researcher = Agent(
     role="Trend Researcher for Kahani AI",
@@ -134,7 +134,7 @@ trend_researcher = Agent(
     {BRAND_CONTEXT}
     You identify topics that will attract parents searching for bedtime story ideas, 
     multilingual education tips, and screen-free activities for kids.""",
-       llm="meta-llama/llama-3.3-70b-instruct:free",
+    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
     verbose=True
 )
 
@@ -146,19 +146,19 @@ blog_writer = Agent(
     You write blog posts that feel like advice from a trusted friend. Crucially, you structure 
     your writing for Generative Engine Optimization (GEO): you use clear headings, bullet points, 
     direct answers to common questions, and high information density without fluff, making it 
-    easy for AI models (like Perplexity or ChatGPT) to cite and rank your content.""",
-       llm="meta-llama/llama-3.3-70b-instruct:free",
+    easy for AI models to cite and rank your content.""",
+    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
     verbose=True
 )
 
 seo_geo_optimizer = Agent(
-    role="SEO & GEO (Generative Engine Optimization) Specialist",
-    goal="Optimize content to rank in both traditional search engines (Google) and AI search engines (Perplexity, ChatGPT, Gemini)",
+    role="SEO & GEO Specialist",
+    goal="Optimize content to rank in both traditional search engines and AI search engines",
     backstory="""You are an expert in both traditional SEO and modern GEO. You know that AI engines 
     prioritize clear structure, authoritative facts, direct answers to questions, and high information 
     density. You create keyword-rich slugs, compelling meta descriptions, strategic keyword lists, 
     and specific 'Direct Answer' snippets that AI models love to pull into their responses.""",
-       llm="meta-llama/llama-3.3-70b-instruct:free",
+    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
     verbose=True
 )
 
@@ -175,7 +175,7 @@ ceo_reviewer = Agent(
     - Structured perfectly for SEO and GEO (clear headings, direct answers, no fluff)
     You reject anything that feels salesy, inappropriate, low-quality, or poorly structured.
     {BRAND_CONTEXT}""",
-       llm="meta-llama/llama-3.3-70b-instruct:free",
+    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
     verbose=True
 )
 
@@ -188,7 +188,7 @@ social_strategist = Agent(
     - Facebook = parenting communities, longer storytelling posts
     - YouTube = tutorials, story previews, parenting tips
     You pick the best platforms and angles for each blog.""",
-       llm="meta-llama/llama-3.3-70b-instruct:free",
+    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
     verbose=True
 )
 
@@ -198,7 +198,7 @@ content_creator = Agent(
     backstory="""You are a social media expert who creates viral content for parenting brands.
     You write posts that make parents stop scrolling, feel emotional, and want to try Kahani AI.
     You use emojis, hooks, and storytelling techniques that work on each platform.""",
-       llm="meta-llama/llama-3.3-70b-instruct:free",
+    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
     verbose=True
 )
 
@@ -207,13 +207,12 @@ poster = Agent(
     goal="Format the final approved content for publishing across platforms",
     backstory="""You are the final step in the content pipeline. You take approved content 
     and format it perfectly for each social platform, ready to be posted.""",
-       llm="meta-llama/llama-3.3-70b-instruct:free",
+    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
     verbose=True
 )
 
 # ============ PHASE 1: BLOG CREATION PIPELINE ============
 def run_blog_creation_phase():
-    """Research → Write → SEO/GEO → CEO Review → Auto-Publish"""
     print("\n" + "="*60)
     print("📝 PHASE 1: BLOG CREATION")
     print("="*60)
@@ -272,10 +271,9 @@ def run_blog_creation_phase():
         verbose=True
     )
     
-    # Run the crew
     crew.kickoff()
     
-    # ✅ THE FIX: Access each task's output directly
+    # Access each task's output directly
     title = research_task.output.raw.strip() if research_task.output else "Untitled"
     blog_content = write_task.output.raw.strip() if write_task.output else ""
     seo_output = seo_geo_task.output.raw.strip() if seo_geo_task.output else ""
@@ -294,7 +292,6 @@ def run_blog_creation_phase():
         elif line.startswith("KEYWORDS:"):
             keywords = line.replace("KEYWORDS:", "").strip()
     
-    # Check CEO decision
     is_approved = "APPROVED" in ceo_decision and "REJECTED" not in ceo_decision
     
     print(f"\n📊 CEO Decision: {'✅ APPROVED' if is_approved else '❌ REJECTED'}")
