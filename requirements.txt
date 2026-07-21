@@ -1,3 +1,4 @@
-crewai[google-genai]
+crewai
 python-dotenv
 requests
+litellm
