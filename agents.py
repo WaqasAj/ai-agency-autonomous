@@ -8,7 +8,10 @@ from datetime import datetime
 #GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 NOTION_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DB_ID = os.getenv("NOTION_DATABASE_ID")
-   os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
+
+# Set the OpenRouter API key for CrewAI to use
+os.environ["OPENROUTER_API_KEY"] = OPENROUTER_KEY
 
 # ============ KAHAANI AI BRAND CONTEXT ============
 BRAND_CONTEXT = """
@@ -38,8 +41,8 @@ def fetch_unprocessed_published_blogs():
             "and": [
                 {"property": "published", "checkbox": {"equals": True}},
                 {"or": [
-                    {"property": "Social Status", "select": {"equals": "Not Processed"}},
-                    {"property": "Social Status", "select": {"is_empty": True}}
+                    {"property": "Status", "select": {"equals": "Not Processed"}},
+                    {"property": "Status", "select": {"is_empty": True}}
                 ]}
             ]
         }
@@ -82,8 +85,8 @@ def create_new_blog_in_notion(title, content, slug, meta_description, keywords):
             "slug": {"rich_text": [{"text": {"content": slug}}]},
             "meta description": {"rich_text": [{"text": {"content": meta_description}}]},
             "keywords": {"rich_text": [{"text": {"content": keywords}}]},
-            "content": {"rich_text": [{"text": {"content": content[:2000]}}]},  # Notion limit
-            "published": {"checkbox": False},  # Draft - not live yet
+            "content": {"rich_text": [{"text": {"content": content[:2000]}}]},
+            "published": {"checkbox": False},
             "Blog Source": {"select": {"name": "AI Generated"}}
         }
     }
@@ -109,9 +112,9 @@ def auto_publish_blog(page_id):
         return False
 
 def update_social_status(page_id, status):
-    """Update the Social Status column."""
+    """Update the Status column."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
-    payload = {"properties": {"Social Status": {"select": {"name": status}}}}
+    payload = {"properties": {"Status": {"select": {"name": status}}}}
     requests.patch(url, headers=notion_headers(), json=payload)
 
 def log_to_notion(blog_title, agent_output):
@@ -137,34 +140,37 @@ trend_researcher = Agent(
     {BRAND_CONTEXT}
     You identify topics that will attract parents searching for bedtime story ideas, 
     multilingual education tips, and screen-free activities for kids.""",
-       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
 blog_writer = Agent(
     role="Kids' Story & Parenting Blog Writer",
-    goal="Write engaging, warm, family-friendly blog posts that resonate with parents",
+    goal="Write engaging, warm, family-friendly blog posts optimized for both human readers and AI search engines (GEO)",
     backstory=f"""You are a beloved children's content writer with 15 years of experience.
     {BRAND_CONTEXT}
-    You write blog posts that feel like advice from a trusted friend — warm, practical, 
-    and culturally aware. You naturally weave in how Kahani AI can help parents.""",
-       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+    You write blog posts that feel like advice from a trusted friend. Crucially, you structure 
+    your writing for Generative Engine Optimization (GEO): you use clear headings, bullet points, 
+    direct answers to common questions, and high information density without fluff, making it 
+    easy for AI models (like Perplexity or ChatGPT) to cite and rank your content.""",
+    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
-seo_optimizer = Agent(
-    role="SEO and GEO Specialist for Parenting Niche",
-    goal="Create perfect slugs, meta descriptions, and keywords that rank in Google and structured data to rank in AI search engines",
-    backstory="""You are an SEO and GEO expert who specializes in parenting and education blogs.
-    You create keyword-rich slugs, compelling meta descriptions (under 160 chars), 
-    and strategic keyword lists and structured data that help blogs rank on Google and Generative AI engines.""",
-       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+seo_geo_optimizer = Agent(
+    role="SEO & GEO (Generative Engine Optimization) Specialist",
+    goal="Optimize content to rank in both traditional search engines (Google) and AI search engines (Perplexity, ChatGPT, Gemini)",
+    backstory="""You are an expert in both traditional SEO and modern GEO. You know that AI engines 
+    prioritize clear structure, authoritative facts, direct answers to questions, and high information 
+    density. You create keyword-rich slugs, compelling meta descriptions, strategic keyword lists, 
+    and specific 'Direct Answer' snippets that AI models love to pull into their responses.""",
+    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
 ceo_reviewer = Agent(
     role="Chief Content Officer at Kahani AI",
-    goal="""Review blog posts for quality, brand alignment, and child-safety. 
+    goal="""Review blog posts for quality, brand alignment, child-safety, and GEO/SEO effectiveness. 
     If approved, output EXACTLY 'APPROVED' on a line by itself. If rejected, output 'REJECTED' with reasons.""",
     backstory=f"""You are the Chief Content Officer at Kahani AI. You are fiercely protective 
     of the brand's reputation. You ensure every piece of content is:
@@ -172,9 +178,10 @@ ceo_reviewer = Agent(
     - Culturally sensitive (English, Urdu, Arabic, Hindi audiences)
     - Genuinely helpful to parents
     - Aligned with Kahani AI's warm, trustworthy voice
-    You reject anything that feels salesy, inappropriate, or low-quality.
+    - Structured perfectly for SEO and GEO (clear headings, direct answers, no fluff)
+    You reject anything that feels salesy, inappropriate, low-quality, or poorly structured.
     {BRAND_CONTEXT}""",
-       llm="openrouter/meta-llama/llama-3.3-70b-instruct"",
+    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
@@ -187,7 +194,7 @@ social_strategist = Agent(
     - Facebook = parenting communities, longer storytelling posts
     - YouTube = tutorials, story previews, parenting tips
     You pick the best platforms and angles for each blog.""",
-       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
@@ -197,7 +204,7 @@ content_creator = Agent(
     backstory="""You are a social media expert who creates viral content for parenting brands.
     You write posts that make parents stop scrolling, feel emotional, and want to try Kahani AI.
     You use emojis, hooks, and storytelling techniques that work on each platform.""",
-       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
@@ -206,18 +213,17 @@ poster = Agent(
     goal="Format the final approved content for publishing across platforms",
     backstory="""You are the final step in the content pipeline. You take approved content 
     and format it perfectly for each social platform, ready to be posted.""",
-       llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
     verbose=True
 )
 
 # ============ PHASE 1: BLOG CREATION PIPELINE ============
 def run_blog_creation_phase():
-    """Research → Write → SEO → CEO Review → Auto-Publish"""
+    """Research → Write → SEO/GEO → CEO Review → Auto-Publish"""
     print("\n" + "="*60)
     print("📝 PHASE 1: BLOG CREATION")
     print("="*60)
     
-    # Step 1: Research trending topic
     research_task = Task(
         description=f"""Research ONE trending blog topic perfect for Kahani AI's audience.
         Consider: bedtime routines, multilingual education, screen-free activities, 
@@ -227,38 +233,38 @@ def run_blog_creation_phase():
         agent=trend_researcher
     )
     
-    # Step 2: Write the blog
     write_task = Task(
         description="""Write a complete, engaging blog post (800-1200 words) on the topic.
-        Make it warm, practical, and parent-friendly.
-        Naturally mention how Kahani AI can help (without being salesy).
-        Include practical tips parents can use today.""",
-        expected_output="A complete blog post (800-1200 words)",
+        Make it warm, practical, and parent-friendly. Naturally mention how Kahani AI can help.
+        CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use clear H2/H3 headings, 
+        bullet points, and provide direct, factual answers to common parent questions about the topic. 
+        Avoid fluff; maximize information density.""",
+        expected_output="A complete, GEO-optimized blog post (800-1200 words)",
         agent=blog_writer
     )
     
-    # Step 3: SEO optimize
-    seo_task = Task(
-        description="""Create SEO elements for this blog:
+    seo_geo_task = Task(
+        description="""Create SEO and GEO elements for this blog:
         1. URL slug (lowercase, hyphens, max 60 chars)
         2. Meta description (under 160 chars, compelling)
         3. 5-8 target keywords (comma-separated)
+        4. GEO Direct Answer Snippets: Provide 2-3 concise, factual, standalone sentences that directly answer the core question of the blog (AI engines love pulling these).
         Output in this exact format:
         SLUG: [slug]
         META: [meta description]
-        KEYWORDS: [keyword1, keyword2, ...]""",
-        expected_output="Slug, meta description, and keywords in specified format",
-        agent=seo_optimizer
+        KEYWORDS: [keyword1, keyword2, ...]
+        GEO_SNIPPETS: [snippet 1] | [snippet 2]""",
+        expected_output="Slug, meta description, keywords, and GEO snippets in specified format",
+        agent=seo_geo_optimizer
     )
     
-    # Step 4: CEO review
     review_task = Task(
         description="""Review the blog post for:
         - Child-safety and family-friendliness
         - Cultural sensitivity (multilingual audience)
         - Brand voice alignment (warm, trustworthy)
         - Genuine value to parents
-        - Quality of writing
+        - Quality of writing and GEO/SEO structure (clear headings, direct answers)
         If approved, output 'APPROVED' on its own line.
         If rejected, output 'REJECTED' with specific reasons.""",
         expected_output="APPROVED or REJECTED with reasons",
@@ -266,8 +272,8 @@ def run_blog_creation_phase():
     )
     
     crew = Crew(
-        agents=[trend_researcher, blog_writer, seo_optimizer, ceo_reviewer],
-        tasks=[research_task, write_task, seo_task, review_task],
+        agents=[trend_researcher, blog_writer, seo_geo_optimizer, ceo_reviewer],
+        tasks=[research_task, write_task, seo_geo_task, review_task],
         process=Process.sequential,
         verbose=True
     )
@@ -275,11 +281,9 @@ def run_blog_creation_phase():
     result = crew.kickoff()
     result_str = str(result)
     
-    # Parse the results
     lines = result_str.split('\n')
     title = lines[0] if lines else "Untitled"
     
-    # Extract blog content (everything between title and SEO section)
     blog_content = ""
     slug = ""
     meta = ""
@@ -293,22 +297,18 @@ def run_blog_creation_phase():
         elif line.startswith("KEYWORDS:"):
             keywords = line.replace("KEYWORDS:", "").strip()
     
-    # Blog content is everything before SLUG line
     slug_index = next((i for i, line in enumerate(lines) if line.startswith("SLUG:")), len(lines))
     blog_content = '\n'.join(lines[1:slug_index]).strip()
     
-    # Check CEO decision
     is_approved = "APPROVED" in result_str and "REJECTED" not in result_str
     
     print(f"\n📊 CEO Decision: {'✅ APPROVED' if is_approved else '❌ REJECTED'}")
     print(f"📝 Title: {title}")
     print(f"🔗 Slug: {slug}")
     
-    # Create the blog in Notion
     if is_approved and title and blog_content:
         page_id = create_new_blog_in_notion(title, blog_content, slug, meta, keywords)
         if page_id:
-            # CEO approved → AUTO-PUBLISH to website!
             auto_publish_blog(page_id)
             return {"title": title, "page_id": page_id, "status": "published"}
     
@@ -368,7 +368,6 @@ Content preview: {blog['content'][:1500]}
         
         result = crew.kickoff()
         
-        # Log results and update status
         log_to_notion(blog['title'], result)
         update_social_status(blog['id'], "Posted")
         
@@ -379,13 +378,11 @@ def run_daily_agency():
     print(f"🚀 Starting Kahani AI Autonomous Agency at {datetime.now()}")
     print(BRAND_CONTEXT)
     
-    # Phase 1: Create a new blog (runs once per day)
     try:
         blog_result = run_blog_creation_phase()
     except Exception as e:
         print(f"⚠️ Blog creation phase error: {e}")
     
-    # Phase 2: Promote all published blogs that haven't been promoted yet
     try:
         run_social_promotion_phase()
     except Exception as e:
