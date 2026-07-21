@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agency Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 30px; }
+        .card { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .status { display: inline-block; padding: 5px 10px; border-radius: 5px; font-size: 12px; font-weight: bold; }
+        .status-posted { background: #d4edda; color: #155724; }
+        .status-pending { background: #fff3cd; color: #856404; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background: #f8f9fa; font-weight: bold; }
+        a { color: #667eea; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 AI Social Media Agency</h1>
+        <p>Autonomous agent dashboard - Agents run daily at 9 AM UTC</p>
+    </div>
+
+    <div class="card">
+        <h2>📊 Agent Activity Logs</h2>
+        <p>View detailed agent logs in your Notion database:</p>
+        <p><a href="https://www.notion.so" target="_blank" style="font-size: 18px;">📝 Open Notion Database →</a></p>
+        <p style="color: #666; font-size: 14px; margin-top: 10px;">
+            <em>Each blog processed by agents creates a log entry showing what the Researcher, Strategist, Editor, CEO, and Poster agents did.</em>
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>🔗 Connected Social Accounts</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Platform</th>
+                    <th>Status</th>
+                    <th>Setup</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>LinkedIn</td>
+                    <td><span class="status status-pending">Not Connected</span></td>
+                    <td>Add <code>LINKEDIN_ACCESS_TOKEN</code> to GitHub Secrets</td>
+                </tr>
+                <tr>
+                    <td>Facebook</td>
+                    <td><span class="status status-pending">Not Connected</span></td>
+                    <td>Add <code>FACEBOOK_ACCESS_TOKEN</code> to GitHub Secrets</td>
+                </tr>
+                <tr>
+                    <td>Instagram</td>
+                    <td><span class="status status-pending">Not Connected</span></td>
+                    <td>Add <code>INSTAGRAM_ACCESS_TOKEN</code> to GitHub Secrets</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>⚙️ How It Works</h2>
+        <ol>
+            <li><strong>9 AM UTC Daily:</strong> GitHub Actions wakes up and runs your autonomous agents</li>
+            <li><strong>Researcher Agent:</strong> Fetches new blogs from Notion (Status = "Ready for Social")</li>
+            <li><strong>Strategist Agent:</strong> Decides which platforms to post on and what angle to take</li>
+            <li><strong>Editor Agent:</strong> Creates platform-specific posts</li>
+            <li><strong>CEO Agent:</strong> Reviews quality and approves/rejects</li>
+            <li><strong>Poster Agent:</strong> Publishes approved content and updates Notion</li>
+            <li><strong>Logs:</strong> All agent activity is logged back to Notion for review</li>
+        </ol>
+    </div>
+
+    <div class="card">
+        <h2>🚀 Manual Trigger</h2>
+        <p>Want to test the agents right now without waiting for the daily schedule?</p>
+        <ol>
+            <li>Go to your GitHub repo → <strong>Actions</strong> tab</li>
+            <li>Click <strong>"Daily Autonomous Agents"</strong> workflow</li>
+            <li>Click <strong>"Run workflow"</strong> → <strong>"Run workflow"</strong></li>
+            <li>Wait 2-3 minutes for agents to complete</li>
+            <li>Check Notion for new log entries</li>
+        </ol>
+    </div>
+</body>
+</html>
