@@ -5,14 +5,12 @@ from crewai import Agent, Task, Crew, Process
 from datetime import datetime
 
 # ============ LOAD SECRETS ============
-#GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 NOTION_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DB_ID = os.getenv("NOTION_DATABASE_ID")
 OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# Set the OpenRouter API key for CrewAI to use
 os.environ["OPENROUTER_API_KEY"] = OPENROUTER_KEY
-print(f"DEBUG: OPENROUTER_KEY is {'SET' if OPENROUTER_KEY else 'MISSING'}")
 
 # ============ KAHAANI AI BRAND CONTEXT ============
 BRAND_CONTEXT = """
@@ -35,7 +33,6 @@ def notion_headers():
     }
 
 def fetch_unprocessed_published_blogs():
-    """Fetch blogs that are published but not yet promoted on social media."""
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     payload = {
         "filter": {
@@ -77,7 +74,6 @@ def fetch_unprocessed_published_blogs():
     return blogs
 
 def create_new_blog_in_notion(title, content, slug, meta_description, keywords):
-    """Create a new blog post in Notion as a draft (published = unchecked)."""
     url = "https://api.notion.com/v1/pages"
     payload = {
         "parent": {"database_id": NOTION_DB_ID},
@@ -97,11 +93,10 @@ def create_new_blog_in_notion(title, content, slug, meta_description, keywords):
         print(f"✅ Created new blog draft: {title}")
         return page_id
     else:
-        print(f"❌ Failed to create blog: {response.text}")
+        print(f"❌ Failed to create blog: {response.status_code} - {response.text}")
         return None
 
 def auto_publish_blog(page_id):
-    """CEO approved the blog → check the published box → it goes live on website."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
     payload = {"properties": {"published": {"checkbox": True}}}
     response = requests.patch(url, headers=notion_headers(), json=payload)
@@ -109,17 +104,15 @@ def auto_publish_blog(page_id):
         print(f"🚀 AUTO-PUBLISHED blog to website!")
         return True
     else:
-        print(f"❌ Failed to publish: {response.text}")
+        print(f"❌ Failed to publish: {response.status_code} - {response.text}")
         return False
 
 def update_social_status(page_id, status):
-    """Update the Status column."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
     payload = {"properties": {"Status": {"select": {"name": status}}}}
     requests.patch(url, headers=notion_headers(), json=payload)
 
 def log_to_notion(blog_title, agent_output):
-    """Create a log entry showing what the agents did."""
     url = "https://api.notion.com/v1/pages"
     truncated = str(agent_output)[:2000]
     payload = {
@@ -141,7 +134,7 @@ trend_researcher = Agent(
     {BRAND_CONTEXT}
     You identify topics that will attract parents searching for bedtime story ideas, 
     multilingual education tips, and screen-free activities for kids.""",
-    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+       llm="meta-llama/llama-3.3-70b-instruct:free",
     verbose=True
 )
 
@@ -154,7 +147,7 @@ blog_writer = Agent(
     your writing for Generative Engine Optimization (GEO): you use clear headings, bullet points, 
     direct answers to common questions, and high information density without fluff, making it 
     easy for AI models (like Perplexity or ChatGPT) to cite and rank your content.""",
-    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+       llm="meta-llama/llama-3.3-70b-instruct:free",
     verbose=True
 )
 
@@ -165,7 +158,7 @@ seo_geo_optimizer = Agent(
     prioritize clear structure, authoritative facts, direct answers to questions, and high information 
     density. You create keyword-rich slugs, compelling meta descriptions, strategic keyword lists, 
     and specific 'Direct Answer' snippets that AI models love to pull into their responses.""",
-    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+       llm="meta-llama/llama-3.3-70b-instruct:free",
     verbose=True
 )
 
@@ -182,7 +175,7 @@ ceo_reviewer = Agent(
     - Structured perfectly for SEO and GEO (clear headings, direct answers, no fluff)
     You reject anything that feels salesy, inappropriate, low-quality, or poorly structured.
     {BRAND_CONTEXT}""",
-    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+       llm="meta-llama/llama-3.3-70b-instruct:free",
     verbose=True
 )
 
@@ -195,7 +188,7 @@ social_strategist = Agent(
     - Facebook = parenting communities, longer storytelling posts
     - YouTube = tutorials, story previews, parenting tips
     You pick the best platforms and angles for each blog.""",
-    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+       llm="meta-llama/llama-3.3-70b-instruct:free",
     verbose=True
 )
 
@@ -205,7 +198,7 @@ content_creator = Agent(
     backstory="""You are a social media expert who creates viral content for parenting brands.
     You write posts that make parents stop scrolling, feel emotional, and want to try Kahani AI.
     You use emojis, hooks, and storytelling techniques that work on each platform.""",
-    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+       llm="meta-llama/llama-3.3-70b-instruct:free",
     verbose=True
 )
 
@@ -214,7 +207,7 @@ poster = Agent(
     goal="Format the final approved content for publishing across platforms",
     backstory="""You are the final step in the content pipeline. You take approved content 
     and format it perfectly for each social platform, ready to be posted.""",
-    llm="openrouter/meta-llama/llama-3.3-70b-instruct",
+       llm="meta-llama/llama-3.3-70b-instruct:free",
     verbose=True
 )
 
@@ -229,7 +222,7 @@ def run_blog_creation_phase():
         description=f"""Research ONE trending blog topic perfect for Kahani AI's audience.
         Consider: bedtime routines, multilingual education, screen-free activities, 
         cultural stories, child development, Islamic stories for kids.
-        Output a compelling blog topic/title.""",
+        Output ONLY the blog topic/title, nothing else.""",
         expected_output="A single compelling blog topic/title",
         agent=trend_researcher
     )
@@ -249,7 +242,7 @@ def run_blog_creation_phase():
         1. URL slug (lowercase, hyphens, max 60 chars)
         2. Meta description (under 160 chars, compelling)
         3. 5-8 target keywords (comma-separated)
-        4. GEO Direct Answer Snippets: Provide 2-3 concise, factual, standalone sentences that directly answer the core question of the blog (AI engines love pulling these).
+        4. GEO Direct Answer Snippets: Provide 2-3 concise, factual, standalone sentences that directly answer the core question of the blog.
         Output in this exact format:
         SLUG: [slug]
         META: [meta description]
@@ -279,18 +272,21 @@ def run_blog_creation_phase():
         verbose=True
     )
     
-    result = crew.kickoff()
-    result_str = str(result)
+    # Run the crew
+    crew.kickoff()
     
-    lines = result_str.split('\n')
-    title = lines[0] if lines else "Untitled"
+    # ✅ THE FIX: Access each task's output directly
+    title = research_task.output.raw.strip() if research_task.output else "Untitled"
+    blog_content = write_task.output.raw.strip() if write_task.output else ""
+    seo_output = seo_geo_task.output.raw.strip() if seo_geo_task.output else ""
+    ceo_decision = review_task.output.raw.strip() if review_task.output else ""
     
-    blog_content = ""
+    # Parse SEO/GEO data
     slug = ""
     meta = ""
     keywords = ""
     
-    for i, line in enumerate(lines):
+    for line in seo_output.split('\n'):
         if line.startswith("SLUG:"):
             slug = line.replace("SLUG:", "").strip()
         elif line.startswith("META:"):
@@ -298,14 +294,14 @@ def run_blog_creation_phase():
         elif line.startswith("KEYWORDS:"):
             keywords = line.replace("KEYWORDS:", "").strip()
     
-    slug_index = next((i for i, line in enumerate(lines) if line.startswith("SLUG:")), len(lines))
-    blog_content = '\n'.join(lines[1:slug_index]).strip()
-    
-    is_approved = "APPROVED" in result_str and "REJECTED" not in result_str
+    # Check CEO decision
+    is_approved = "APPROVED" in ceo_decision and "REJECTED" not in ceo_decision
     
     print(f"\n📊 CEO Decision: {'✅ APPROVED' if is_approved else '❌ REJECTED'}")
     print(f"📝 Title: {title}")
     print(f"🔗 Slug: {slug}")
+    print(f"📄 Meta: {meta}")
+    print(f"🔑 Keywords: {keywords}")
     
     if is_approved and title and blog_content:
         page_id = create_new_blog_in_notion(title, blog_content, slug, meta, keywords)
@@ -317,7 +313,6 @@ def run_blog_creation_phase():
 
 # ============ PHASE 2: SOCIAL MEDIA PROMOTION ============
 def run_social_promotion_phase():
-    """Fetch published blogs → Strategy → Create → Post"""
     print("\n" + "="*60)
     print("📱 PHASE 2: SOCIAL MEDIA PROMOTION")
     print("="*60)
