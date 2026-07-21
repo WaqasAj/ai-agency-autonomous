@@ -12,6 +12,7 @@ OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # Set the OpenRouter API key for CrewAI to use
 os.environ["OPENROUTER_API_KEY"] = OPENROUTER_KEY
+print(f"DEBUG: OPENROUTER_KEY is {'SET' if OPENROUTER_KEY else 'MISSING'}")
 
 # ============ KAHAANI AI BRAND CONTEXT ============
 BRAND_CONTEXT = """
