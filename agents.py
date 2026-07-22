@@ -9,7 +9,6 @@ import litellm
 _original_completion = litellm.completion
 
 def _strip_cache_breakpoint(obj):
-    """Recursively remove 'cache_breakpoint' from any dict in the payload."""
     if isinstance(obj, dict):
         obj.pop("cache_breakpoint", None)
         for v in obj.values():
@@ -42,6 +41,32 @@ complete with illustrations. Features:
 - Brand voice: Warm, family-friendly, educational, culturally sensitive, trustworthy
 - Content themes: Bedtime routines, benefits of storytelling, multilingual education, 
   cultural stories, child development, screen-free activities, Islamic stories
+"""
+
+# ============ HUMANIZATION GUIDELINES ============
+HUMANIZATION_RULES = """
+CRITICAL: Write like a real human parent, NOT like an AI. Follow these rules STRICTLY:
+
+AVOID THESE AI PATTERNS (they will be rejected):
+- Never start paragraphs with "In today's world", "In the digital age", "It's important to note"
+- Never use "delve", "tapestry", "landscape", "realm", "journey" (overused AI words)
+- Never use "foster", "cultivate", "embark", "navigate" in cliché ways
+- Never write perfectly balanced, symmetrical paragraphs
+- Never use generic filler like "Let's explore", "Let's dive in"
+- Never use excessive transition words like "Furthermore", "Moreover", "Additionally"
+
+DO THESE INSTEAD (human signals):
+- Vary sentence length wildly — mix 5-word sentences with 25-word ones
+- Start sentences with "And", "But", "Because", "So" — like real people talk
+- Include specific numbers: "my 4-year-old", "3 AM wake-ups", "15 minutes before bed"
+- Use contractions: "don't", "it's", "you'll", "we've"
+- Add personal-sounding moments: "I remember when...", "Last week, my daughter..."
+- Ask rhetorical questions: "Sound familiar?", "You know that feeling, right?"
+- Use conversational asides: "(Yes, even on the tough nights)", "(trust me on this one)"
+- Include imperfect but relatable details: cold coffee, messy rooms, tired eyes
+- Write like you're texting a friend who gets it
+- Use occasional humor or gentle self-deprecation
+- Break grammar rules occasionally for voice
 """
 
 # ============ NOTION API HELPERS ============
@@ -145,8 +170,7 @@ def log_to_notion(blog_title, agent_output):
     }
     requests.post(url, headers=notion_headers(), json=payload)
 
-# ============ DEFINE THE 7 AUTONOMOUS AGENTS (100% FREE - MISTRAL) ============
-# Using Mistral Small - permanently free, native CrewAI support, no compatibility issues
+# ============ DEFINE THE 7 AUTONOMOUS AGENTS ============
 
 FREE_MODEL = "mistral/mistral-small-latest"
 
@@ -162,14 +186,14 @@ trend_researcher = Agent(
 )
 
 blog_writer = Agent(
-    role="Kids' Story & Parenting Blog Writer",
-    goal="Write engaging, warm, family-friendly blog posts optimized for both human readers and AI search engines (GEO)",
-    backstory=f"""You are a beloved children's content writer with 15 years of experience.
+    role="Human Blog Writer (Writes Like a Real Parent)",
+    goal="Write blog posts that are 100% indistinguishable from human-written content by real parents",
+    backstory=f"""You are a parent-blogger with 15 years of experience writing from real life.
     {BRAND_CONTEXT}
-    You write blog posts that feel like advice from a trusted friend. Crucially, you structure 
-    your writing for Generative Engine Optimization (GEO): you use clear headings, bullet points, 
-    direct answers to common questions, and high information density without fluff, making it 
-    easy for AI models to cite and rank your content.""",
+    {HUMANIZATION_RULES}
+    You write like you're sharing advice with a friend over coffee — messy, real, warm, 
+    and full of specific details from your own experience. Every sentence should feel 
+    like it came from a human who has actually lived this.""",
     llm=FREE_MODEL,
     verbose=True
 )
@@ -187,17 +211,39 @@ seo_geo_optimizer = Agent(
 
 ceo_reviewer = Agent(
     role="Chief Content Officer at Kahani AI",
-    goal="""Review blog posts for quality, brand alignment, child-safety, and GEO/SEO effectiveness. 
-    If approved, output EXACTLY 'APPROVED' on a line by itself. If rejected, output 'REJECTED' with reasons.""",
-    backstory=f"""You are the Chief Content Officer at Kahani AI. You are fiercely protective 
-    of the brand's reputation. You ensure every piece of content is:
-    - Child-safe and family-friendly
-    - Culturally sensitive (English, Urdu, Arabic, Hindi audiences)
-    - Genuinely helpful to parents
-    - Aligned with Kahani AI's warm, trustworthy voice
-    - Structured perfectly for SEO and GEO (clear headings, direct answers, no fluff)
-    You reject anything that feels salesy, inappropriate, low-quality, or poorly structured.
-    {BRAND_CONTEXT}""",
+    goal="""Review blog posts with EXTREME rigor. Check for: quality, brand alignment, child-safety, 
+    GEO/SEO structure, AND humanization. Output in this EXACT format:
+    
+    DECISION: APPROVED or REJECTED
+    SCORE: X/10
+    REASONS: [bullet list of specific issues]
+    FIXES_NEEDED: [bullet list of exact changes required]
+    
+    Be harsh. Reject anything that sounds AI-generated.""",
+    backstory=f"""You are the Chief Content Officer at Kahani AI with 20 years in content.
+    You are OBSESSED with human-sounding content. You can spot AI writing from a mile away.
+    
+    {BRAND_CONTEXT}
+    
+    YOUR REVIEW CRITERIA (score each 1-10):
+    1. HUMANIZATION: Does it sound like a real parent wrote it? Check for AI clichés.
+    2. Child-safety and family-friendliness
+    3. Cultural sensitivity (English, Urdu, Arabic, Hindi audiences)
+    4. Brand voice alignment (warm, trustworthy, real)
+    5. Genuine value to parents
+    6. GEO/SEO structure (clear headings, direct answers)
+    
+    AUTOMATIC REJECTION TRIGGERS (reject immediately if found):
+    - Uses "In today's digital age", "It's important to note", "Let's dive in"
+    - Uses "delve", "tapestry", "landscape", "realm", "foster", "cultivate"
+    - Perfectly symmetrical paragraphs
+    - Generic, vague statements without specifics
+    - Robotic, balanced sentence structure throughout
+    - No personal voice or emotion
+    
+    If APPROVED: Output "DECISION: APPROVED" and a brief praise.
+    If REJECTED: Output "DECISION: REJECTED" followed by SPECIFIC reasons and EXACT fixes needed.
+    The writer will read your feedback and revise. Be detailed and actionable.""",
     llm=FREE_MODEL,
     verbose=True
 )
@@ -234,12 +280,13 @@ poster = Agent(
     verbose=True
 )
 
-# ============ PHASE 1: BLOG CREATION PIPELINE ============
+# ============ PHASE 1: BLOG CREATION WITH FEEDBACK LOOP ============
 def run_blog_creation_phase():
     print("\n" + "="*60)
-    print("📝 PHASE 1: BLOG CREATION")
+    print("📝 PHASE 1: BLOG CREATION (with CEO feedback loop)")
     print("="*60)
     
+    # STEP 1: Research topic (runs once)
     research_task = Task(
         description=f"""Research ONE trending blog topic perfect for Kahani AI's audience.
         Consider: bedtime routines, multilingual education, screen-free activities, 
@@ -249,18 +296,62 @@ def run_blog_creation_phase():
         agent=trend_researcher
     )
     
-    write_task = Task(
-        description="""Write a complete, engaging blog post (800-1200 words) on the topic.
-        Make it warm, practical, and parent-friendly. Naturally mention how Kahani AI can help.
-        CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use clear H2/H3 headings, 
-        bullet points, and provide direct, factual answers to common parent questions about the topic. 
-        Avoid fluff; maximize information density.""",
-        expected_output="A complete, GEO-optimized blog post (800-1200 words)",
-        agent=blog_writer
+    research_crew = Crew(
+        agents=[trend_researcher],
+        tasks=[research_task],
+        process=Process.sequential,
+        verbose=True
     )
     
-    seo_geo_task = Task(
-        description="""Create SEO and GEO elements for this blog:
+    research_crew.kickoff()
+    title = research_task.output.raw.strip() if research_task.output else "Untitled"
+    print(f"\n🎯 Topic selected: {title}")
+    
+    # STEP 2: Write → SEO → Review (loops up to 2 times with CEO feedback)
+    MAX_REVISIONS = 2
+    ceo_feedback = None
+    final_blog_content = None
+    final_seo_output = None
+    final_ceo_decision = None
+    
+    for attempt in range(1, MAX_REVISIONS + 1):
+        print(f"\n{'='*40}")
+        print(f"📝 ATTEMPT {attempt}/{MAX_REVISIONS}")
+        print(f"{'='*40}")
+        
+        # Write task - includes previous feedback if this is a revision
+        if ceo_feedback:
+            write_description = f"""REVISE the blog post based on CEO feedback.
+            
+PREVIOUS CEO FEEDBACK:
+{ceo_feedback}
+
+Fix ALL the issues mentioned. Apply every specific change requested.
+Maintain the same topic: {title}
+
+{HUMANIZATION_RULES}
+
+Output ONLY the revised blog post (800-1200 words), nothing else."""
+        else:
+            write_description = f"""Write a complete, engaging blog post (800-1200 words) on this topic: {title}
+
+{HUMANIZATION_RULES}
+
+Make it warm, practical, and parent-friendly. Naturally mention how Kahani AI can help.
+CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use clear H2/H3 headings, 
+bullet points, and provide direct, factual answers to common parent questions about the topic. 
+Avoid fluff; maximize information density.
+
+Output ONLY the blog post, nothing else."""
+        
+        write_task = Task(
+            description=write_description,
+            expected_output="A complete, human-sounding, GEO-optimized blog post (800-1200 words)",
+            agent=blog_writer
+        )
+        
+        seo_geo_task = Task(
+            description="""Create SEO and GEO elements for this blog:
         1. URL slug (lowercase, hyphens, max 60 chars)
         2. Meta description (under 160 chars, compelling)
         3. 5-8 target keywords (comma-separated)
@@ -270,42 +361,74 @@ def run_blog_creation_phase():
         META: [meta description]
         KEYWORDS: [keyword1, keyword2, ...]
         GEO_SNIPPETS: [snippet 1] | [snippet 2]""",
-        expected_output="Slug, meta description, keywords, and GEO snippets in specified format",
-        agent=seo_geo_optimizer
-    )
-    
-    review_task = Task(
-        description="""Review the blog post for:
+            expected_output="Slug, meta description, keywords, and GEO snippets in specified format",
+            agent=seo_geo_optimizer
+        )
+        
+        review_task = Task(
+            description="""Review the blog post rigorously against ALL criteria:
+        - HUMANIZATION (most important): Does it sound like a real parent? Check for AI clichés.
         - Child-safety and family-friendliness
         - Cultural sensitivity (multilingual audience)
-        - Brand voice alignment (warm, trustworthy)
+        - Brand voice alignment (warm, trustworthy, real)
         - Genuine value to parents
-        - Quality of writing and GEO/SEO structure (clear headings, direct answers)
-        If approved, output 'APPROVED' on its own line.
-        If rejected, output 'REJECTED' with specific reasons.""",
-        expected_output="APPROVED or REJECTED with reasons",
-        agent=ceo_reviewer
-    )
+        - GEO/SEO structure (clear headings, direct answers)
+        
+        Output in EXACT format:
+        DECISION: APPROVED or REJECTED
+        SCORE: X/10
+        REASONS: [bullet list]
+        FIXES_NEEDED: [bullet list - only if REJECTED]""",
+            expected_output="DECISION, SCORE, REASONS, and FIXES_NEEDED",
+            agent=ceo_reviewer
+        )
+        
+        crew = Crew(
+            agents=[blog_writer, seo_geo_optimizer, ceo_reviewer],
+            tasks=[write_task, seo_geo_task, review_task],
+            process=Process.sequential,
+            verbose=True
+        )
+        
+        crew.kickoff()
+        
+        # Extract outputs
+        blog_content = write_task.output.raw.strip() if write_task.output else ""
+        seo_output = seo_geo_task.output.raw.strip() if seo_geo_task.output else ""
+        ceo_decision = review_task.output.raw.strip() if review_task.output else ""
+        
+        print(f"\n📊 CEO Response (Attempt {attempt}):")
+        print(ceo_decision[:500])
+        
+        # Parse CEO decision
+        is_approved = "DECISION: APPROVED" in ceo_decision.upper()
+        
+        if is_approved:
+            print(f"\n✅ CEO APPROVED on attempt {attempt}!")
+            final_blog_content = blog_content
+            final_seo_output = seo_output
+            final_ceo_decision = ceo_decision
+            break
+        else:
+            print(f"\n❌ CEO REJECTED on attempt {attempt}. Extracting feedback...")
+            ceo_feedback = ceo_decision
+            
+            # Save as fallback in case this is the last attempt
+            final_blog_content = blog_content
+            final_seo_output = seo_output
+            final_ceo_decision = ceo_decision
+            
+            if attempt < MAX_REVISIONS:
+                print(f"🔄 Sending feedback to writer for revision...")
+            else:
+                print(f"⚠️ Max revisions reached. Using last version.")
     
-    crew = Crew(
-        agents=[trend_researcher, blog_writer, seo_geo_optimizer, ceo_reviewer],
-        tasks=[research_task, write_task, seo_geo_task, review_task],
-        process=Process.sequential,
-        verbose=True
-    )
-    
-    crew.kickoff()
-    
-    title = research_task.output.raw.strip() if research_task.output else "Untitled"
-    blog_content = write_task.output.raw.strip() if write_task.output else ""
-    seo_output = seo_geo_task.output.raw.strip() if seo_geo_task.output else ""
-    ceo_decision = review_task.output.raw.strip() if review_task.output else ""
-    
+    # Parse SEO/GEO data from final version
     slug = ""
     meta = ""
     keywords = ""
     
-    for line in seo_output.split('\n'):
+    for line in final_seo_output.split('\n'):
         if line.startswith("SLUG:"):
             slug = line.replace("SLUG:", "").strip()
         elif line.startswith("META:"):
@@ -313,21 +436,21 @@ def run_blog_creation_phase():
         elif line.startswith("KEYWORDS:"):
             keywords = line.replace("KEYWORDS:", "").strip()
     
-    is_approved = "APPROVED" in ceo_decision and "REJECTED" not in ceo_decision
+    is_approved = "DECISION: APPROVED" in final_ceo_decision.upper()
     
-    print(f"\n📊 CEO Decision: {'✅ APPROVED' if is_approved else '❌ REJECTED'}")
+    print(f"\n📊 Final CEO Decision: {'✅ APPROVED' if is_approved else '❌ REJECTED'}")
     print(f"📝 Title: {title}")
     print(f"🔗 Slug: {slug}")
     print(f"📄 Meta: {meta}")
     print(f"🔑 Keywords: {keywords}")
     
-    if is_approved and title and blog_content:
-        page_id = create_new_blog_in_notion(title, blog_content, slug, meta, keywords)
+    if is_approved and title and final_blog_content:
+        page_id = create_new_blog_in_notion(title, final_blog_content, slug, meta, keywords)
         if page_id:
             auto_publish_blog(page_id)
             return {"title": title, "page_id": page_id, "status": "published"}
     
-    return {"title": title, "status": "rejected"}
+    return {"title": title, "status": "rejected", "feedback": final_ceo_decision}
 
 # ============ PHASE 2: SOCIAL MEDIA PROMOTION ============
 def run_social_promotion_phase():
