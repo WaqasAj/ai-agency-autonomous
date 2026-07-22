@@ -4,6 +4,7 @@ import re
 from crewai import Agent, Task, Crew, Process
 from datetime import datetime
 import litellm
+import uuid
 
 # ============ THE FIX: Strip cache_breakpoint from every API call ============
 _original_completion = litellm.completion
@@ -70,9 +71,6 @@ DO THESE INSTEAD (human signals):
 """
 
 # ============ NOTION API HELPERS ============
-# IMPORTANT: Property names must match EXACTLY (case-sensitive)
-# Status is type "status" (NOT "select") - different API format!
-
 def notion_headers():
     return {
         "Authorization": f"Bearer {NOTION_KEY}",
@@ -80,12 +78,156 @@ def notion_headers():
         "Content-Type": "application/json"
     }
 
+def generate_blog_image(title, keywords):
+    """Generate an AI image for the blog using Pollinations.ai (100% free, no API key)."""
+    # Create a descriptive prompt for the image
+    prompt = f"Whimsical children's illustration, {title}, warm colors, bedtime story style, family-friendly, soft lighting, magical atmosphere, book illustration"
+    
+    # URL encode the prompt
+    encoded_prompt = requests.utils.quote(prompt)
+    
+    # Pollinations.ai generates images from URL parameters (free, no auth)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=630&nologo=true"
+    
+    print(f"🎨 Generated blog image: {image_url}")
+    return image_url
+
+def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url):
+    """
+    Create a Notion page with:
+    - Properties: Title, Slug, Meta Description, Keywords, Content (excerpt), Published
+    - Page Body: Full blog post with image and formatted content
+    """
+    url = "https://api.notion.com/v1/pages"
+    
+    # Extract excerpt (first 500 chars of content for the Content property)
+    excerpt = content[:500] if content else ""
+    
+    # Clean title (remove quotes)
+    clean_title = title.strip('"\'')
+    
+    # Create page with properties
+    payload = {
+        "parent": {"database_id": NOTION_DB_ID},
+        "properties": {
+            "Title": {"title": [{"text": {"content": clean_title}}]},
+            "Slug": {"rich_text": [{"text": {"content": slug}}]},
+            "Meta Description": {"rich_text": [{"text": {"content": meta_description}}]},
+            "Keywords": {"rich_text": [{"text": {"content": keywords}}]},
+            "Content": {"rich_text": [{"text": {"content": excerpt}}]},  # Excerpt only
+            "Published": {"checkbox": False},
+            "Blog Source": {"select": {"name": "AI Generated"}}
+        },
+        # Add content to page body
+        "children": [
+            # Add the generated image
+            {
+                "object": "block",
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {
+                        "url": image_url
+                    }
+                }
+            },
+            # Add spacing
+            {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {}
+            },
+            # Convert blog content to Notion blocks
+            *convert_text_to_notion_blocks(full_blog_content)
+        ]
+    }
+    
+    print(f"\n📝 Creating Notion page with body content...")
+    print(f"   Title: {clean_title}")
+    print(f"   Excerpt length: {len(excerpt)} chars")
+    print(f"   Full content length: {len(full_blog_content)} chars")
+    
+    response = requests.post(url, headers=notion_headers(), json=payload)
+    
+    if response.status_code == 200:
+        page_id = response.json()["id"]
+        print(f"✅ Created Notion page with full content: {clean_title}")
+        return page_id
+    else:
+        print(f"❌ Failed to create page: {response.status_code}")
+        print(f"   Error: {response.text}")
+        return None
+
+def convert_text_to_notion_blocks(text):
+    """Convert plain text blog content to Notion blocks."""
+    blocks = []
+    
+    # Split by paragraphs (double newlines)
+    paragraphs = text.split('\n\n')
+    
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        
+        # Check if it's a heading (starts with #)
+        if para.startswith('### '):
+            blocks.append({
+                "object": "block",
+                "type": "heading_3",
+                "heading_3": {
+                    "rich_text": [{"type": "text", "text": {"content": para.replace('### ', '')}}]
+                }
+            })
+        elif para.startswith('## '):
+            blocks.append({
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": {
+                    "rich_text": [{"type": "text", "text": {"content": para.replace('## ', '')}}]
+                }
+            })
+        elif para.startswith('# '):
+            blocks.append({
+                "object": "block",
+                "type": "heading_1",
+                "heading_1": {
+                    "rich_text": [{"type": "text", "text": {"content": para.replace('# ', '')}}]
+                }
+            })
+        # Check if it's a bullet point
+        elif para.startswith('- ') or para.startswith('* '):
+            blocks.append({
+                "object": "block",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {
+                    "rich_text": [{"type": "text", "text": {"content": para[2:]}}]
+                }
+            })
+        # Check if it's a numbered list
+        elif re.match(r'^\d+\. ', para):
+            blocks.append({
+                "object": "block",
+                "type": "numbered_list_item",
+                "numbered_list_item": {
+                    "rich_text": [{"type": "text", "text": {"content": re.sub(r'^\d+\. ', '', para)}}]
+                }
+            })
+        # Regular paragraph
+        else:
+            blocks.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{"type": "text", "text": {"content": para}}]
+                }
+            })
+    
+    return blocks
+
 def fetch_unprocessed_published_blogs():
     """Fetch blogs that are published but not yet promoted on social media."""
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
-    
-    # Filter: published = true AND Status = "Not Processed" or empty
-    # Note: Status is type "status", not "select"
     payload = {
         "filter": {
             "and": [
@@ -102,7 +244,6 @@ def fetch_unprocessed_published_blogs():
     
     blogs = []
     for result in data.get("results", []):
-        # Extract with EXACT column names (capitalized)
         title = result["properties"]["Title"]["title"][0]["text"]["content"] if result["properties"]["Title"]["title"] else "Untitled"
         
         content = ""
@@ -129,40 +270,6 @@ def fetch_unprocessed_published_blogs():
         })
     return blogs
 
-def create_new_blog_in_notion(title, content, slug, meta_description, keywords):
-    """Create a new blog post in Notion as a draft (Published = unchecked)."""
-    url = "https://api.notion.com/v1/pages"
-    
-    # Use EXACT column names (capitalized)
-    payload = {
-        "parent": {"database_id": NOTION_DB_ID},
-        "properties": {
-            "Title": {"title": [{"text": {"content": title}}]},
-            "Slug": {"rich_text": [{"text": {"content": slug}}]},
-            "Meta Description": {"rich_text": [{"text": {"content": meta_description}}]},
-            "Keywords": {"rich_text": [{"text": {"content": keywords}}]},
-            "Content": {"rich_text": [{"text": {"content": content[:2000]}}]},
-            "Published": {"checkbox": False},
-            "Blog Source": {"select": {"name": "AI Generated"}}
-        }
-    }
-    
-    print(f"\n📝 Creating blog in Notion...")
-    print(f"   Title: {title}")
-    print(f"   Slug: {slug}")
-    print(f"   Content length: {len(content)} chars")
-    
-    response = requests.post(url, headers=notion_headers(), json=payload)
-    
-    if response.status_code == 200:
-        page_id = response.json()["id"]
-        print(f"✅ Created new blog draft: {title}")
-        return page_id
-    else:
-        print(f"❌ Failed to create blog: {response.status_code}")
-        print(f"   Error: {response.text}")
-        return None
-
 def auto_publish_blog(page_id):
     """CEO approved the blog → check the Published box → it goes live on website."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
@@ -175,14 +282,13 @@ def auto_publish_blog(page_id):
         print(f"✅ AUTO-PUBLISHED blog to website!")
         return True
     else:
-        print(f"❌ Failed to publish: {response.status_code}")
+        print(f" Failed to publish: {response.status_code}")
         print(f"   Error: {response.text}")
         return False
 
 def update_social_status(page_id, status):
     """Update the Status column. Note: Status is type 'status', not 'select'."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
-    # IMPORTANT: Use "status" not "select" for status-type properties
     payload = {"properties": {"Status": {"status": {"name": status}}}}
     
     response = requests.patch(url, headers=notion_headers(), json=payload)
@@ -195,17 +301,19 @@ def log_to_notion(blog_title, agent_output):
     """Create a log entry showing what the agents did."""
     url = "https://api.notion.com/v1/pages"
     truncated = str(agent_output)[:2000]
+    clean_title = blog_title.strip('"\'')
+    
     payload = {
         "parent": {"database_id": NOTION_DB_ID},
         "properties": {
-            "Title": {"title": [{"text": {"content": f"📋 Log: {blog_title}"}}]},
+            "Title": {"title": [{"text": {"content": f"📋 Log: {clean_title}"}}]},
             "Content": {"rich_text": [{"text": {"content": truncated}}]},
             "Published": {"checkbox": False}
         }
     }
     response = requests.post(url, headers=notion_headers(), json=payload)
     if response.status_code == 200:
-        print(f"✅ Logged results to Notion for: {blog_title}")
+        print(f"✅ Logged results to Notion for: {clean_title}")
     else:
         print(f"⚠️ Failed to log to Notion: {response.status_code}")
 
@@ -473,18 +581,32 @@ Output ONLY the blog post, nothing else."""
     is_approved = "DECISION: APPROVED" in final_ceo_decision.upper()
     
     print(f"\n📊 Final CEO Decision: {'✅ APPROVED' if is_approved else '❌ REJECTED'}")
-    print(f"📝 Title: {title}")
+    clean_title = title.strip('"\'')
+    print(f"📝 Title: {clean_title}")
     print(f"🔗 Slug: {slug}")
     print(f"📄 Meta: {meta}")
-    print(f"🔑 Keywords: {keywords}")
+    print(f" Keywords: {keywords}")
     
-    if is_approved and title and final_blog_content:
-        page_id = create_new_blog_in_notion(title, final_blog_content, slug, meta, keywords)
+    if is_approved and clean_title and final_blog_content:
+        # Generate image for the blog
+        image_url = generate_blog_image(clean_title, keywords)
+        
+        # Create page with properties AND body content
+        page_id = create_notion_page_with_body(
+            clean_title, 
+            final_blog_content[:500],  # Excerpt for Content property
+            slug, 
+            meta, 
+            keywords,
+            final_blog_content,  # Full content for page body
+            image_url
+        )
+        
         if page_id:
             auto_publish_blog(page_id)
-            return {"title": title, "page_id": page_id, "status": "published"}
+            return {"title": clean_title, "page_id": page_id, "status": "published"}
     
-    return {"title": title, "status": "rejected", "feedback": final_ceo_decision}
+    return {"title": clean_title, "status": "rejected", "feedback": final_ceo_decision}
 
 # ============ PHASE 2: SOCIAL MEDIA PROMOTION ============
 def run_social_promotion_phase():
@@ -498,7 +620,7 @@ def run_social_promotion_phase():
         print("✅ No new blogs to promote today.")
         return
     
-    print(f"📝 Found {len(blogs)} blog(s) to promote")
+    print(f" Found {len(blogs)} blog(s) to promote")
     
     for blog in blogs:
         print(f"\n🔄 Promoting: {blog['title']}")
