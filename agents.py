@@ -5,12 +5,11 @@ from crewai import Agent, Task, Crew, Process
 from datetime import datetime
 
 # ============ LOAD SECRETS ============
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 NOTION_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DB_ID = os.getenv("NOTION_DATABASE_ID")
-OPENROUTER_KEY = os.getenv("OPENROUTER_API_KEY")
+GROQ_KEY = os.getenv("GROQ_API_KEY")
 
-os.environ["OPENROUTER_API_KEY"] = OPENROUTER_KEY
+os.environ["GROQ_API_KEY"] = GROQ_KEY
 
 # ============ KAHAANI AI BRAND CONTEXT ============
 BRAND_CONTEXT = """
@@ -125,10 +124,11 @@ def log_to_notion(blog_title, agent_output):
     }
     requests.post(url, headers=notion_headers(), json=payload)
 
-# ============ DEFINE THE 7 AUTONOMOUS AGENTS (100% FREE MODELS) ============
-# Using Qwen 2.5 72B:free, which is currently a high-quality, permanently free model on OpenRouter
+# ============ DEFINE THE 7 AUTONOMOUS AGENTS (100% FREE - GROQ) ============
+# Using Groq's free tier: Llama 3.3 70B Versatile
+# Groq offers 14,400 requests/day for free, permanently
 
-FREE_MODEL = "openrouter/qwen/qwen-2.5-72b-instruct:free"
+FREE_MODEL = "groq/llama-3.3-70b-versatile"
 
 trend_researcher = Agent(
     role="Trend Researcher for Kahani AI",
@@ -276,13 +276,11 @@ def run_blog_creation_phase():
     
     crew.kickoff()
     
-    # Access each task's output directly
     title = research_task.output.raw.strip() if research_task.output else "Untitled"
     blog_content = write_task.output.raw.strip() if write_task.output else ""
     seo_output = seo_geo_task.output.raw.strip() if seo_geo_task.output else ""
     ceo_decision = review_task.output.raw.strip() if review_task.output else ""
     
-    # Parse SEO/GEO data
     slug = ""
     meta = ""
     keywords = ""
