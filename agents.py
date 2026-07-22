@@ -523,7 +523,7 @@ Maintain the same topic: {title}
 {HUMANIZATION_RULES}
 
 Output ONLY the revised blog post (800-1200 words). Do NOT repeat the title at the top. 
-Start directly with the introduction paragraph. Use ## for section headings.""",
+Start directly with the introduction paragraph. Use ## for section headings."""
         else:
             write_description = f"""Write a complete, engaging blog post (800-1200 words) on this topic: {title}
 
@@ -535,7 +535,7 @@ bullet points, and provide direct, factual answers to common parent questions ab
 Avoid fluff; maximize information density.
 
 IMPORTANT: Do NOT repeat the title at the top. Start directly with the introduction paragraph.
-Use ## for section headings (not #).""",
+Use ## for section headings (not #)."""
         
         write_task = Task(
             description=write_description,
