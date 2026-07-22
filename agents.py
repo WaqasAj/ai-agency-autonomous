@@ -444,12 +444,35 @@ Output ONLY the blog post, nothing else."""
     print(f"📄 Meta: {meta}")
     print(f"🔑 Keywords: {keywords}")
     
-    if is_approved and title and final_blog_content:
-        page_id = create_new_blog_in_notion(title, final_blog_content, slug, meta, keywords)
-        if page_id:
-            auto_publish_blog(page_id)
-            return {"title": title, "page_id": page_id, "status": "published"}
+    print(f"\n🔍 DEBUG - Checking approval conditions:")
+    print(f"   is_approved: {is_approved}")
+    print(f"   title: {title}")
+    print(f"   final_blog_content length: {len(final_blog_content) if final_blog_content else 0}")
+    print(f"   slug: {slug}")
+    print(f"   meta: {meta}")
+    print(f"   keywords: {keywords}")
     
+    if is_approved and title and final_blog_content:
+        print(f"\n✅ All conditions met. Attempting to create blog in Notion...")
+        page_id = create_new_blog_in_notion(title, final_blog_content, slug, meta, keywords)
+        
+        if page_id:
+            print(f"✅ Blog created with page_id: {page_id}")
+            print(f"🚀 Attempting to auto-publish...")
+            success = auto_publish_blog(page_id)
+            
+            if success:
+                print(f"✅ Blog published to website!")
+                return {"title": title, "page_id": page_id, "status": "published"}
+            else:
+                print(f"❌ Failed to publish blog")
+                return {"title": title, "page_id": page_id, "status": "created_but_not_published"}
+        else:
+            print(f"❌ Failed to create blog in Notion")
+            return {"title": title, "status": "failed_to_create"}
+    
+    print(f"\n❌ Approval conditions not met:")
+    print(f"   is_approved={is_approved}, title={bool(title)}, content={bool(final_blog_content)}")
     return {"title": title, "status": "rejected", "feedback": final_ceo_decision}
 
 # ============ PHASE 2: SOCIAL MEDIA PROMOTION ============
