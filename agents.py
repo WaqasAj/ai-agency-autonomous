@@ -4,7 +4,6 @@ import re
 from crewai import Agent, Task, Crew, Process
 from datetime import datetime
 import litellm
-import uuid
 
 # ============ THE FIX: Strip cache_breakpoint from every API call ============
 _original_completion = litellm.completion
@@ -70,6 +69,44 @@ DO THESE INSTEAD (human signals):
 - Break grammar rules occasionally for voice
 """
 
+# ============ CLEANING HELPERS ============
+def clean_title(title):
+    """Remove all surrounding quotes, asterisks, and whitespace from title."""
+    if not title:
+        return "Untitled"
+    # Strip *, ", ', whitespace from start and end (handles any combination)
+    cleaned = re.sub(r'^[\s\*"\']+', '', title)
+    cleaned = re.sub(r'[\s\*"\']+$', '', cleaned)
+    return cleaned.strip()
+
+def clean_blog_content(content, title):
+    """Clean blog content: remove leading title repetition, markdown wrappers, etc."""
+    if not content:
+        return ""
+    
+    # Remove markdown code block wrappers (```markdown ... ```)
+    content = re.sub(r'^```(?:markdown|md)?\s*', '', content)
+    content = re.sub(r'\s*```$', '', content)
+    
+    # Remove leading title repetition (e.g., "# Title" at the start)
+    clean_t = clean_title(title)
+    # Match leading heading that contains the title
+    content = re.sub(r'^#+\s*' + re.escape(clean_t) + r'\s*\n+', '', content, flags=re.IGNORECASE)
+    
+    # Also remove if title appears with quotes/markdown around it
+    content = re.sub(r'^#+\s*["\']?\*?' + re.escape(clean_t) + r'\*?["\']?\s*\n+', '', content, flags=re.IGNORECASE)
+    
+    # Remove any remaining leading # that's just a title-like heading (first line only)
+    lines = content.split('\n')
+    if lines and lines[0].startswith('# ') and len(lines[0]) < 100:
+        # Check if this first heading looks like the title (not actual content heading)
+        first_heading = lines[0].replace('#', '').strip()
+        if clean_t.lower() in first_heading.lower() or first_heading.lower() in clean_t.lower():
+            lines = lines[1:]
+            content = '\n'.join(lines)
+    
+    return content.strip()
+
 # ============ NOTION API HELPERS ============
 def notion_headers():
     return {
@@ -79,86 +116,39 @@ def notion_headers():
     }
 
 def generate_blog_image(title, keywords):
-    """Generate a high-quality AI image for the blog using Pollinations.ai."""
-    # Enhanced prompt with quality boosters
-    prompt = f"""Professional children's book illustration, {title}. 
-    High quality, highly detailed, vibrant colors, soft warm lighting, 
-    magical dreamy atmosphere, whimsical and heartwarming style. 
-    Professional digital art, Pixar-style rendering, 4K quality, 
-    award-winning illustration, family-friendly, cozy bedtime scene.
-    Keywords: {keywords}"""
+    """Generate a high-quality AI image with proper anatomy using Pollinations.ai."""
+    # Quality-focused prompt with anatomy safeguards
+    prompt = f"""Professional children's book illustration for a blog post titled: {title}. 
+    Theme keywords: {keywords}.
+    Style: Warm, whimsical, heartwarming digital illustration, Pixar-quality rendering.
+    Composition: Soft warm lighting, magical dreamy atmosphere, cozy bedtime scene, 
+    vibrant yet gentle colors, professional book cover quality.
+    Technical: Sharp focus, highly detailed, 4K quality, award-winning illustration, 
+    anatomically correct features, natural proportions, symmetrical composition, 
+    perfect facial features, correctly proportioned hands with five fingers each, 
+    well-defined objects, no distortion, clear details."""
     
-    # Clean up the prompt (remove newlines, extra spaces)
+    # Negative prompt to avoid deformations
+    negative_prompt = """deformed, distorted, disfigured, poorly drawn, bad anatomy, 
+    wrong anatomy, extra limbs, missing limbs, floating limbs, mutated hands, 
+    extra fingers, missing fingers, fused fingers, malformed hands, bad hands, 
+    bad fingers, blurry, out of focus, low quality, ugly, disfigured face, 
+    asymmetrical face, cross-eyed, deformed eyes, mutation, mutilated, 
+    grainy, low resolution, poorly drawn face, poorly drawn hands"""
+    
+    # Clean up prompts (single line, no extra spaces)
     prompt = ' '.join(prompt.split())
+    negative_prompt = ' '.join(negative_prompt.split())
     
-    # URL encode the prompt
+    # URL encode
     encoded_prompt = requests.utils.quote(prompt)
+    encoded_negative = requests.utils.quote(negative_prompt)
     
-    # Higher quality parameters: larger size, better model, no watermark
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1536&height=1024&nologo=true&model=flux&enhance=true"
+    # Use flux model (best for anatomy), large size, enhancement, negative prompt
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1536&height=1024&nologo=true&model=flux&enhance=true&negative_prompt={encoded_negative}&seed={hash(title) % 10000}"
     
     print(f"🎨 Generated high-quality blog image")
     return image_url
-
-def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url):
-    """
-    Create a Notion page with:
-    - Properties: Title, Slug, Meta Description, Keywords, Content (excerpt), Published
-    - Page Body: Full blog post with image and formatted content
-    """
-    url = "https://api.notion.com/v1/pages"
-    
-    # Extract excerpt (first 500 chars of content for the Content property)
-    excerpt = content[:500] if content else ""
-    
-    # Strip ALL leading/trailing quotes (handles multiple layers)
-    clean_title = re.sub(r'^["\']+|["\']+$', '', title).strip()
-    
-    # Create page with properties
-    payload = {
-        "parent": {"database_id": NOTION_DB_ID},
-        "properties": {
-            "Title": {"title": [{"text": {"content": clean_title}}]},
-            "Slug": {"rich_text": [{"text": {"content": slug}}]},
-            "Meta Description": {"rich_text": [{"text": {"content": meta_description}}]},
-            "Keywords": {"rich_text": [{"text": {"content": keywords}}]},
-            "Content": {"rich_text": [{"text": {"content": excerpt}}]},  # Excerpt only
-            "Published": {"checkbox": False},
-            "Blog Source": {"select": {"name": "AI Generated"}}
-        },
-        # Add content to page body
-        "children": [
-            # Add the generated image
-            {
-                "object": "block",
-                "type": "image",
-                "image": {
-                    "type": "external",
-                    "external": {
-                        "url": image_url
-                    }
-                }
-            },
-            # Convert blog content to Notion blocks
-            *convert_text_to_notion_blocks(full_blog_content)
-        ]
-    }
-    
-    print(f"\n📝 Creating Notion page with body content...")
-    print(f"   Title: {clean_title}")
-    print(f"   Excerpt length: {len(excerpt)} chars")
-    print(f"   Full content length: {len(full_blog_content)} chars")
-    
-    response = requests.post(url, headers=notion_headers(), json=payload)
-    
-    if response.status_code == 200:
-        page_id = response.json()["id"]
-        print(f"✅ Created Notion page with full content: {clean_title}")
-        return page_id
-    else:
-        print(f"❌ Failed to create page: {response.status_code}")
-        print(f"   Error: {response.text}")
-        return None
 
 def convert_text_to_notion_blocks(text):
     """Convert plain text blog content to Notion blocks."""
@@ -227,6 +217,59 @@ def convert_text_to_notion_blocks(text):
     
     return blocks
 
+def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url):
+    """Create a Notion page with properties (excerpt) and body (full content + image)."""
+    url = "https://api.notion.com/v1/pages"
+    
+    # Clean title and content
+    clean_t = clean_title(title)
+    clean_content = clean_blog_content(full_blog_content, clean_t)
+    
+    # Extract excerpt (first 500 chars for the Content property)
+    excerpt = clean_content[:500] if clean_content else ""
+    
+    payload = {
+        "parent": {"database_id": NOTION_DB_ID},
+        "properties": {
+            "Title": {"title": [{"text": {"content": clean_t}}]},
+            "Slug": {"rich_text": [{"text": {"content": slug}}]},
+            "Meta Description": {"rich_text": [{"text": {"content": meta_description}}]},
+            "Keywords": {"rich_text": [{"text": {"content": keywords}}]},
+            "Content": {"rich_text": [{"text": {"content": excerpt}}]},
+            "Published": {"checkbox": False},
+            "Blog Source": {"select": {"name": "AI Generated"}}
+        },
+        "children": [
+            # Generated image at top
+            {
+                "object": "block",
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {"url": image_url}
+                }
+            },
+            # Full blog content as Notion blocks
+            *convert_text_to_notion_blocks(clean_content)
+        ]
+    }
+    
+    print(f"\n📝 Creating Notion page...")
+    print(f"   Title: {clean_t}")
+    print(f"   Excerpt: {len(excerpt)} chars")
+    print(f"   Full content: {len(clean_content)} chars")
+    
+    response = requests.post(url, headers=notion_headers(), json=payload)
+    
+    if response.status_code == 200:
+        page_id = response.json()["id"]
+        print(f"✅ Created Notion page: {clean_t}")
+        return page_id
+    else:
+        print(f"❌ Failed to create page: {response.status_code}")
+        print(f"   Error: {response.text}")
+        return None
+
 def fetch_unprocessed_published_blogs():
     """Fetch blogs that are published but not yet promoted on social media."""
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
@@ -273,7 +316,7 @@ def fetch_unprocessed_published_blogs():
     return blogs
 
 def auto_publish_blog(page_id):
-    """CEO approved the blog → check the Published box → it goes live on website."""
+    """Check the Published box to push blog live on website."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
     payload = {"properties": {"Published": {"checkbox": True}}}
     
@@ -284,12 +327,12 @@ def auto_publish_blog(page_id):
         print(f"✅ AUTO-PUBLISHED blog to website!")
         return True
     else:
-        print(f" Failed to publish: {response.status_code}")
+        print(f"❌ Failed to publish: {response.status_code}")
         print(f"   Error: {response.text}")
         return False
 
 def update_social_status(page_id, status):
-    """Update the Status column. Note: Status is type 'status', not 'select'."""
+    """Update the Status column (type: status, not select)."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
     payload = {"properties": {"Status": {"status": {"name": status}}}}
     
@@ -303,19 +346,19 @@ def log_to_notion(blog_title, agent_output):
     """Create a log entry showing what the agents did."""
     url = "https://api.notion.com/v1/pages"
     truncated = str(agent_output)[:2000]
-    clean_title = blog_title.strip('"\'')
+    clean_t = clean_title(blog_title)
     
     payload = {
         "parent": {"database_id": NOTION_DB_ID},
         "properties": {
-            "Title": {"title": [{"text": {"content": f"📋 Log: {clean_title}"}}]},
+            "Title": {"title": [{"text": {"content": f"📋 Log: {clean_t}"}}]},
             "Content": {"rich_text": [{"text": {"content": truncated}}]},
             "Published": {"checkbox": False}
         }
     }
     response = requests.post(url, headers=notion_headers(), json=payload)
     if response.status_code == 200:
-        print(f"✅ Logged results to Notion for: {clean_title}")
+        print(f"✅ Logged results to Notion for: {clean_t}")
     else:
         print(f"⚠️ Failed to log to Notion: {response.status_code}")
 
@@ -435,13 +478,13 @@ def run_blog_creation_phase():
     print("📝 PHASE 1: BLOG CREATION (with CEO feedback loop)")
     print("="*60)
     
-    # STEP 1: Research topic (runs once)
+    # STEP 1: Research topic
     research_task = Task(
         description=f"""Research ONE trending blog topic perfect for Kahani AI's audience.
         Consider: bedtime routines, multilingual education, screen-free activities, 
         cultural stories, child development, Islamic stories for kids.
-        Output ONLY the blog topic/title, nothing else.""",
-        expected_output="A single compelling blog topic/title",
+        Output ONLY the blog topic/title as plain text, no quotes, no markdown, nothing else.""",
+        expected_output="A single compelling blog topic/title as plain text",
         agent=trend_researcher
     )
     
@@ -453,10 +496,10 @@ def run_blog_creation_phase():
     )
     
     research_crew.kickoff()
-    title = research_task.output.raw.strip() if research_task.output else "Untitled"
+    title = clean_title(research_task.output.raw.strip()) if research_task.output else "Untitled"
     print(f"\n🎯 Topic selected: {title}")
     
-    # STEP 2: Write → SEO → Review (loops up to 2 times with CEO feedback)
+    # STEP 2: Write → SEO → Review (up to 2 attempts)
     MAX_REVISIONS = 2
     ceo_feedback = None
     final_blog_content = None
@@ -479,18 +522,20 @@ Maintain the same topic: {title}
 
 {HUMANIZATION_RULES}
 
-Output ONLY the revised blog post (800-1200 words), nothing else."""
+Output ONLY the revised blog post (800-1200 words). Do NOT repeat the title at the top. 
+Start directly with the introduction paragraph. Use ## for section headings.""",
         else:
             write_description = f"""Write a complete, engaging blog post (800-1200 words) on this topic: {title}
 
 {HUMANIZATION_RULES}
 
 Make it warm, practical, and parent-friendly. Naturally mention how Kahani AI can help.
-CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use clear H2/H3 headings, 
+CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use ## for section headings, 
 bullet points, and provide direct, factual answers to common parent questions about the topic. 
 Avoid fluff; maximize information density.
 
-Output ONLY the blog post, nothing else."""
+IMPORTANT: Do NOT repeat the title at the top. Start directly with the introduction paragraph.
+Use ## for section headings (not #).""",
         
         write_task = Task(
             description=write_description,
@@ -567,7 +612,7 @@ Output ONLY the blog post, nothing else."""
             else:
                 print(f"⚠️ Max revisions reached. Using last version.")
     
-    # Parse SEO/GEO data from final version
+    # Parse SEO/GEO data
     slug = ""
     meta = ""
     keywords = ""
@@ -583,32 +628,31 @@ Output ONLY the blog post, nothing else."""
     is_approved = "DECISION: APPROVED" in final_ceo_decision.upper()
     
     print(f"\n📊 Final CEO Decision: {'✅ APPROVED' if is_approved else '❌ REJECTED'}")
-    clean_title = re.sub(r'^["\']+|["\']+$', '', title).strip()
-    print(f"📝 Title: {clean_title}")
+    print(f"📝 Title: {title}")
     print(f"🔗 Slug: {slug}")
     print(f"📄 Meta: {meta}")
-    print(f" Keywords: {keywords}")
+    print(f"🔑 Keywords: {keywords}")
     
-    if is_approved and clean_title and final_blog_content:
-        # Generate image for the blog
-        image_url = generate_blog_image(clean_title, keywords)
+    if is_approved and title and final_blog_content:
+        # Generate high-quality image
+        image_url = generate_blog_image(title, keywords)
         
-        # Create page with properties AND body content
+        # Create Notion page with properties + body content
         page_id = create_notion_page_with_body(
-            clean_title, 
-            final_blog_content[:500],  # Excerpt for Content property
+            title, 
+            final_blog_content[:500],
             slug, 
             meta, 
             keywords,
-            final_blog_content,  # Full content for page body
+            final_blog_content,
             image_url
         )
         
         if page_id:
             auto_publish_blog(page_id)
-            return {"title": clean_title, "page_id": page_id, "status": "published"}
+            return {"title": title, "page_id": page_id, "status": "published"}
     
-    return {"title": clean_title, "status": "rejected", "feedback": final_ceo_decision}
+    return {"title": title, "status": "rejected", "feedback": final_ceo_decision}
 
 # ============ PHASE 2: SOCIAL MEDIA PROMOTION ============
 def run_social_promotion_phase():
@@ -622,7 +666,7 @@ def run_social_promotion_phase():
         print("✅ No new blogs to promote today.")
         return
     
-    print(f" Found {len(blogs)} blog(s) to promote")
+    print(f"📝 Found {len(blogs)} blog(s) to promote")
     
     for blog in blogs:
         print(f"\n🔄 Promoting: {blog['title']}")
