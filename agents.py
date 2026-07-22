@@ -79,17 +79,25 @@ def notion_headers():
     }
 
 def generate_blog_image(title, keywords):
-    """Generate an AI image for the blog using Pollinations.ai (100% free, no API key)."""
-    # Create a descriptive prompt for the image
-    prompt = f"Whimsical children's illustration, {title}, warm colors, bedtime story style, family-friendly, soft lighting, magical atmosphere, book illustration"
+    """Generate a high-quality AI image for the blog using Pollinations.ai."""
+    # Enhanced prompt with quality boosters
+    prompt = f"""Professional children's book illustration, {title}. 
+    High quality, highly detailed, vibrant colors, soft warm lighting, 
+    magical dreamy atmosphere, whimsical and heartwarming style. 
+    Professional digital art, Pixar-style rendering, 4K quality, 
+    award-winning illustration, family-friendly, cozy bedtime scene.
+    Keywords: {keywords}"""
+    
+    # Clean up the prompt (remove newlines, extra spaces)
+    prompt = ' '.join(prompt.split())
     
     # URL encode the prompt
     encoded_prompt = requests.utils.quote(prompt)
     
-    # Pollinations.ai generates images from URL parameters (free, no auth)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=630&nologo=true"
+    # Higher quality parameters: larger size, better model, no watermark
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1536&height=1024&nologo=true&model=flux&enhance=true"
     
-    print(f"🎨 Generated blog image: {image_url}")
+    print(f"🎨 Generated high-quality blog image")
     return image_url
 
 def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url):
@@ -103,8 +111,8 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
     # Extract excerpt (first 500 chars of content for the Content property)
     excerpt = content[:500] if content else ""
     
-    # Clean title (remove quotes)
-    clean_title = title.strip('"\'')
+    # Strip ALL leading/trailing quotes (handles multiple layers)
+    clean_title = re.sub(r'^["\']+|["\']+$', '', title).strip()
     
     # Create page with properties
     payload = {
@@ -575,7 +583,7 @@ Output ONLY the blog post, nothing else."""
     is_approved = "DECISION: APPROVED" in final_ceo_decision.upper()
     
     print(f"\n📊 Final CEO Decision: {'✅ APPROVED' if is_approved else '❌ REJECTED'}")
-    clean_title = title.strip('"\'')
+    clean_title = re.sub(r'^["\']+|["\']+$', '', title).strip()
     print(f"📝 Title: {clean_title}")
     print(f"🔗 Slug: {slug}")
     print(f"📄 Meta: {meta}")
