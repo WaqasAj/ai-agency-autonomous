@@ -3,16 +3,13 @@ import requests
 import re
 from crewai import Agent, Task, Crew, Process
 from datetime import datetime
-import litellm
-litellm.drop_params = True
 
 # ============ LOAD SECRETS ============
 NOTION_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DB_ID = os.getenv("NOTION_DATABASE_ID")
-GROQ_KEY = os.getenv("GROQ_API_KEY")
+MISTRAL_KEY = os.getenv("MISTRAL_API_KEY")
 
-os.environ["GROQ_API_KEY"] = GROQ_KEY
-os.environ["LITELLM_DROP_PARAMS"] = "True"
+os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
 
 # ============ KAHAANI AI BRAND CONTEXT ============
 BRAND_CONTEXT = """
@@ -127,11 +124,10 @@ def log_to_notion(blog_title, agent_output):
     }
     requests.post(url, headers=notion_headers(), json=payload)
 
-# ============ DEFINE THE 7 AUTONOMOUS AGENTS (100% FREE - GROQ) ============
-# Using Groq's free tier: Llama 3.3 70B Versatile
-# Groq offers 14,400 requests/day for free, permanently
+# ============ DEFINE THE 7 AUTONOMOUS AGENTS (100% FREE - MISTRAL) ============
+# Using Mistral Small - permanently free, native CrewAI support, no compatibility issues
 
-FREE_MODEL = "groq/llama-3.3-70b-versatile"
+FREE_MODEL = "mistral/mistral-small-latest"
 
 trend_researcher = Agent(
     role="Trend Researcher for Kahani AI",
