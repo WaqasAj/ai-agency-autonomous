@@ -24,10 +24,12 @@ jobs:
         pip install -r requirements.txt
     
     - name: Run Autonomous Agents
+    
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
         NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
       run: |
+        python check_columns.py
         python agents.py
