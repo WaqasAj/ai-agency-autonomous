@@ -131,12 +131,6 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
                     }
                 }
             },
-            # Add spacing
-            {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {}
-            },
             # Convert blog content to Notion blocks
             *convert_text_to_notion_blocks(full_blog_content)
         ]
