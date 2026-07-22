@@ -126,6 +126,9 @@ def log_to_notion(blog_title, agent_output):
     requests.post(url, headers=notion_headers(), json=payload)
 
 # ============ DEFINE THE 7 AUTONOMOUS AGENTS (100% FREE MODELS) ============
+# Using Qwen 2.5 72B:free, which is currently a high-quality, permanently free model on OpenRouter
+
+FREE_MODEL = "openrouter/qwen/qwen-2.5-72b-instruct:free"
 
 trend_researcher = Agent(
     role="Trend Researcher for Kahani AI",
@@ -134,7 +137,7 @@ trend_researcher = Agent(
     {BRAND_CONTEXT}
     You identify topics that will attract parents searching for bedtime story ideas, 
     multilingual education tips, and screen-free activities for kids.""",
-    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
+    llm=FREE_MODEL,
     verbose=True
 )
 
@@ -147,7 +150,7 @@ blog_writer = Agent(
     your writing for Generative Engine Optimization (GEO): you use clear headings, bullet points, 
     direct answers to common questions, and high information density without fluff, making it 
     easy for AI models to cite and rank your content.""",
-    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
+    llm=FREE_MODEL,
     verbose=True
 )
 
@@ -158,7 +161,7 @@ seo_geo_optimizer = Agent(
     prioritize clear structure, authoritative facts, direct answers to questions, and high information 
     density. You create keyword-rich slugs, compelling meta descriptions, strategic keyword lists, 
     and specific 'Direct Answer' snippets that AI models love to pull into their responses.""",
-    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
+    llm=FREE_MODEL,
     verbose=True
 )
 
@@ -175,7 +178,7 @@ ceo_reviewer = Agent(
     - Structured perfectly for SEO and GEO (clear headings, direct answers, no fluff)
     You reject anything that feels salesy, inappropriate, low-quality, or poorly structured.
     {BRAND_CONTEXT}""",
-    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
+    llm=FREE_MODEL,
     verbose=True
 )
 
@@ -188,7 +191,7 @@ social_strategist = Agent(
     - Facebook = parenting communities, longer storytelling posts
     - YouTube = tutorials, story previews, parenting tips
     You pick the best platforms and angles for each blog.""",
-    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
+    llm=FREE_MODEL,
     verbose=True
 )
 
@@ -198,7 +201,7 @@ content_creator = Agent(
     backstory="""You are a social media expert who creates viral content for parenting brands.
     You write posts that make parents stop scrolling, feel emotional, and want to try Kahani AI.
     You use emojis, hooks, and storytelling techniques that work on each platform.""",
-    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
+    llm=FREE_MODEL,
     verbose=True
 )
 
@@ -207,7 +210,7 @@ poster = Agent(
     goal="Format the final approved content for publishing across platforms",
     backstory="""You are the final step in the content pipeline. You take approved content 
     and format it perfectly for each social platform, ready to be posted.""",
-    llm="openrouter/meta-llama/llama-3.1-8b-instruct:free",
+    llm=FREE_MODEL,
     verbose=True
 )
 
