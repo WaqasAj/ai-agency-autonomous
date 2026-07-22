@@ -70,6 +70,9 @@ DO THESE INSTEAD (human signals):
 """
 
 # ============ NOTION API HELPERS ============
+# IMPORTANT: Property names must match EXACTLY (case-sensitive)
+# Status is type "status" (NOT "select") - different API format!
+
 def notion_headers():
     return {
         "Authorization": f"Bearer {NOTION_KEY}",
@@ -78,14 +81,18 @@ def notion_headers():
     }
 
 def fetch_unprocessed_published_blogs():
+    """Fetch blogs that are published but not yet promoted on social media."""
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
+    
+    # Filter: published = true AND Status = "Not Processed" or empty
+    # Note: Status is type "status", not "select"
     payload = {
         "filter": {
             "and": [
-                {"property": "published", "checkbox": {"equals": True}},
+                {"property": "Published", "checkbox": {"equals": True}},
                 {"or": [
-                    {"property": "Status", "select": {"equals": "Not Processed"}},
-                    {"property": "Status", "select": {"is_empty": True}}
+                    {"property": "Status", "status": {"equals": "Not Processed"}},
+                    {"property": "Status", "status": {"is_empty": True}}
                 ]}
             ]
         }
@@ -95,19 +102,23 @@ def fetch_unprocessed_published_blogs():
     
     blogs = []
     for result in data.get("results", []):
-        title = result["properties"]["title"]["title"][0]["text"]["content"] if result["properties"]["title"]["title"] else "Untitled"
+        # Extract with EXACT column names (capitalized)
+        title = result["properties"]["Title"]["title"][0]["text"]["content"] if result["properties"]["Title"]["title"] else "Untitled"
+        
         content = ""
-        if "content" in result["properties"] and result["properties"]["content"]["type"] == "rich_text":
-            if result["properties"]["content"]["rich_text"]:
-                content = result["properties"]["content"]["rich_text"][0]["text"]["content"]
+        if "Content" in result["properties"] and result["properties"]["Content"]["type"] == "rich_text":
+            if result["properties"]["Content"]["rich_text"]:
+                content = result["properties"]["Content"]["rich_text"][0]["text"]["content"]
+        
         meta = ""
-        if "meta description" in result["properties"] and result["properties"]["meta description"]["type"] == "rich_text":
-            if result["properties"]["meta description"]["rich_text"]:
-                meta = result["properties"]["meta description"]["rich_text"][0]["text"]["content"]
+        if "Meta Description" in result["properties"] and result["properties"]["Meta Description"]["type"] == "rich_text":
+            if result["properties"]["Meta Description"]["rich_text"]:
+                meta = result["properties"]["Meta Description"]["rich_text"][0]["text"]["content"]
+        
         keywords = ""
-        if "keywords" in result["properties"] and result["properties"]["keywords"]["type"] == "rich_text":
-            if result["properties"]["keywords"]["rich_text"]:
-                keywords = result["properties"]["keywords"]["rich_text"][0]["text"]["content"]
+        if "Keywords" in result["properties"] and result["properties"]["Keywords"]["type"] == "rich_text":
+            if result["properties"]["Keywords"]["rich_text"]:
+                keywords = result["properties"]["Keywords"]["rich_text"][0]["text"]["content"]
         
         blogs.append({
             "id": result["id"],
@@ -119,56 +130,84 @@ def fetch_unprocessed_published_blogs():
     return blogs
 
 def create_new_blog_in_notion(title, content, slug, meta_description, keywords):
+    """Create a new blog post in Notion as a draft (Published = unchecked)."""
     url = "https://api.notion.com/v1/pages"
+    
+    # Use EXACT column names (capitalized)
     payload = {
         "parent": {"database_id": NOTION_DB_ID},
         "properties": {
-            "title": {"title": [{"text": {"content": title}}]},
-            "slug": {"rich_text": [{"text": {"content": slug}}]},
-            "meta description": {"rich_text": [{"text": {"content": meta_description}}]},
-            "keywords": {"rich_text": [{"text": {"content": keywords}}]},
-            "content": {"rich_text": [{"text": {"content": content[:2000]}}]},
-            "published": {"checkbox": False},
+            "Title": {"title": [{"text": {"content": title}}]},
+            "Slug": {"rich_text": [{"text": {"content": slug}}]},
+            "Meta Description": {"rich_text": [{"text": {"content": meta_description}}]},
+            "Keywords": {"rich_text": [{"text": {"content": keywords}}]},
+            "Content": {"rich_text": [{"text": {"content": content[:2000]}}]},
+            "Published": {"checkbox": False},
             "Blog Source": {"select": {"name": "AI Generated"}}
         }
     }
+    
+    print(f"\n📝 Creating blog in Notion...")
+    print(f"   Title: {title}")
+    print(f"   Slug: {slug}")
+    print(f"   Content length: {len(content)} chars")
+    
     response = requests.post(url, headers=notion_headers(), json=payload)
+    
     if response.status_code == 200:
         page_id = response.json()["id"]
         print(f"✅ Created new blog draft: {title}")
         return page_id
     else:
-        print(f"❌ Failed to create blog: {response.status_code} - {response.text}")
+        print(f"❌ Failed to create blog: {response.status_code}")
+        print(f"   Error: {response.text}")
         return None
 
 def auto_publish_blog(page_id):
+    """CEO approved the blog → check the Published box → it goes live on website."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
-    payload = {"properties": {"published": {"checkbox": True}}}
+    payload = {"properties": {"Published": {"checkbox": True}}}
+    
+    print(f"🚀 Publishing blog to website...")
     response = requests.patch(url, headers=notion_headers(), json=payload)
+    
     if response.status_code == 200:
-        print(f"🚀 AUTO-PUBLISHED blog to website!")
+        print(f"✅ AUTO-PUBLISHED blog to website!")
         return True
     else:
-        print(f"❌ Failed to publish: {response.status_code} - {response.text}")
+        print(f"❌ Failed to publish: {response.status_code}")
+        print(f"   Error: {response.text}")
         return False
 
 def update_social_status(page_id, status):
+    """Update the Status column. Note: Status is type 'status', not 'select'."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
-    payload = {"properties": {"Status": {"select": {"name": status}}}}
-    requests.patch(url, headers=notion_headers(), json=payload)
+    # IMPORTANT: Use "status" not "select" for status-type properties
+    payload = {"properties": {"Status": {"status": {"name": status}}}}
+    
+    response = requests.patch(url, headers=notion_headers(), json=payload)
+    if response.status_code == 200:
+        print(f"✅ Updated Status to: {status}")
+    else:
+        print(f"⚠️ Failed to update Status: {response.status_code} - {response.text}")
 
 def log_to_notion(blog_title, agent_output):
+    """Create a log entry showing what the agents did."""
     url = "https://api.notion.com/v1/pages"
     truncated = str(agent_output)[:2000]
     payload = {
         "parent": {"database_id": NOTION_DB_ID},
         "properties": {
-            "title": {"title": [{"text": {"content": f"📋 Log: {blog_title}"}}]},
-            "content": {"rich_text": [{"text": {"content": truncated}}]},
-            "published": {"checkbox": False}
+            "Title": {"title": [{"text": {"content": f"📋 Log: {blog_title}"}}]},
+            "Content": {"rich_text": [{"text": {"content": truncated}}]},
+            "Published": {"checkbox": False}
         }
     }
-    requests.post(url, headers=notion_headers(), json=payload)
+    response = requests.post(url, headers=notion_headers(), json=payload)
+    if response.status_code == 200:
+        print(f"✅ Logged results to Notion for: {blog_title}")
+    else:
+        print(f"⚠️ Failed to log to Notion: {response.status_code}")
 
 # ============ DEFINE THE 7 AUTONOMOUS AGENTS ============
 
@@ -319,7 +358,6 @@ def run_blog_creation_phase():
         print(f"📝 ATTEMPT {attempt}/{MAX_REVISIONS}")
         print(f"{'='*40}")
         
-        # Write task - includes previous feedback if this is a revision
         if ceo_feedback:
             write_description = f"""REVISE the blog post based on CEO feedback.
             
@@ -392,7 +430,6 @@ Output ONLY the blog post, nothing else."""
         
         crew.kickoff()
         
-        # Extract outputs
         blog_content = write_task.output.raw.strip() if write_task.output else ""
         seo_output = seo_geo_task.output.raw.strip() if seo_geo_task.output else ""
         ceo_decision = review_task.output.raw.strip() if review_task.output else ""
@@ -400,7 +437,6 @@ Output ONLY the blog post, nothing else."""
         print(f"\n📊 CEO Response (Attempt {attempt}):")
         print(ceo_decision[:500])
         
-        # Parse CEO decision
         is_approved = "DECISION: APPROVED" in ceo_decision.upper()
         
         if is_approved:
@@ -412,8 +448,6 @@ Output ONLY the blog post, nothing else."""
         else:
             print(f"\n❌ CEO REJECTED on attempt {attempt}. Extracting feedback...")
             ceo_feedback = ceo_decision
-            
-            # Save as fallback in case this is the last attempt
             final_blog_content = blog_content
             final_seo_output = seo_output
             final_ceo_decision = ceo_decision
@@ -444,35 +478,12 @@ Output ONLY the blog post, nothing else."""
     print(f"📄 Meta: {meta}")
     print(f"🔑 Keywords: {keywords}")
     
-    print(f"\n🔍 DEBUG - Checking approval conditions:")
-    print(f"   is_approved: {is_approved}")
-    print(f"   title: {title}")
-    print(f"   final_blog_content length: {len(final_blog_content) if final_blog_content else 0}")
-    print(f"   slug: {slug}")
-    print(f"   meta: {meta}")
-    print(f"   keywords: {keywords}")
-    
     if is_approved and title and final_blog_content:
-        print(f"\n✅ All conditions met. Attempting to create blog in Notion...")
         page_id = create_new_blog_in_notion(title, final_blog_content, slug, meta, keywords)
-        
         if page_id:
-            print(f"✅ Blog created with page_id: {page_id}")
-            print(f"🚀 Attempting to auto-publish...")
-            success = auto_publish_blog(page_id)
-            
-            if success:
-                print(f"✅ Blog published to website!")
-                return {"title": title, "page_id": page_id, "status": "published"}
-            else:
-                print(f"❌ Failed to publish blog")
-                return {"title": title, "page_id": page_id, "status": "created_but_not_published"}
-        else:
-            print(f"❌ Failed to create blog in Notion")
-            return {"title": title, "status": "failed_to_create"}
+            auto_publish_blog(page_id)
+            return {"title": title, "page_id": page_id, "status": "published"}
     
-    print(f"\n❌ Approval conditions not met:")
-    print(f"   is_approved={is_approved}, title={bool(title)}, content={bool(final_blog_content)}")
     return {"title": title, "status": "rejected", "feedback": final_ceo_decision}
 
 # ============ PHASE 2: SOCIAL MEDIA PROMOTION ============
