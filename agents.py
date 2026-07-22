@@ -10,7 +10,7 @@ NOTION_DB_ID = os.getenv("NOTION_DATABASE_ID")
 GROQ_KEY = os.getenv("GROQ_API_KEY")
 
 os.environ["GROQ_API_KEY"] = GROQ_KEY
-   os.environ["LITELLM_DROP_PARAMS"] = "True"
+os.environ["LITELLM_DROP_PARAMS"] = "True"
 
 # ============ KAHAANI AI BRAND CONTEXT ============
 BRAND_CONTEXT = """
