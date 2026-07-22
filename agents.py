@@ -3,6 +3,8 @@ import requests
 import re
 from crewai import Agent, Task, Crew, Process
 from datetime import datetime
+import litellm
+litellm.drop_params = True
 
 # ============ LOAD SECRETS ============
 NOTION_KEY = os.getenv("NOTION_API_KEY")
