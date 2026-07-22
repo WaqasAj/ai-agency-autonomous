@@ -3,6 +3,27 @@ import requests
 import re
 from crewai import Agent, Task, Crew, Process
 from datetime import datetime
+import litellm
+
+# ============ THE FIX: Strip cache_breakpoint from every API call ============
+_original_completion = litellm.completion
+
+def _strip_cache_breakpoint(obj):
+    """Recursively remove 'cache_breakpoint' from any dict in the payload."""
+    if isinstance(obj, dict):
+        obj.pop("cache_breakpoint", None)
+        for v in obj.values():
+            _strip_cache_breakpoint(v)
+    elif isinstance(obj, list):
+        for item in obj:
+            _strip_cache_breakpoint(item)
+
+def _patched_completion(*args, **kwargs):
+    _strip_cache_breakpoint(kwargs)
+    return _original_completion(*args, **kwargs)
+
+litellm.completion = _patched_completion
+# =============================================================================
 
 # ============ LOAD SECRETS ============
 NOTION_KEY = os.getenv("NOTION_API_KEY")
