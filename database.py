@@ -130,3 +130,74 @@ def get_run_history(page_id=None, limit=20):
                     (limit,)
                 )
             return cur.fetchall()
+
+def test_facebook_connection(access_token, page_id):
+    """Test if a Facebook Page token is valid."""
+    try:
+        url = f"https://graph.facebook.com/v19.0/{page_id}?fields=id,name&access_token={access_token}"
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "valid": True,
+                "page_name": data.get("name"),
+                "page_id": data.get("id")
+            }
+        else:
+            error = response.json().get("error", {})
+            return {
+                "valid": False,
+                "error": error.get("message", "Unknown error")
+            }
+    except Exception as e:
+        return {
+            "valid": False,
+            "error": str(e)
+        }
+
+def test_instagram_connection(access_token, ig_account_id):
+    """Test if an Instagram Business token is valid."""
+    try:
+        url = f"https://graph.facebook.com/v19.0/{ig_account_id}?fields=id,username&access_token={access_token}"
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "valid": True,
+                "username": data.get("username"),
+                "ig_id": data.get("id")
+            }
+        else:
+            error = response.json().get("error", {})
+            return {
+                "valid": False,
+                "error": error.get("message", "Unknown error")
+            }
+    except Exception as e:
+        return {
+            "valid": False,
+            "error": str(e)
+        }
+
+def get_page_with_tokens(page_id):
+    """Get a page with all its connected tokens."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            # Get page
+            cur.execute("SELECT * FROM pages WHERE id = %s", (page_id,))
+            page = cur.fetchone()
+            
+            if not page:
+                return None
+            
+            # Get tokens
+            cur.execute(
+                "SELECT * FROM tokens WHERE page_id = %s AND is_active = true",
+                (page_id,)
+            )
+            tokens = cur.fetchall()
+            
+            page["tokens"] = tokens
+            return page
