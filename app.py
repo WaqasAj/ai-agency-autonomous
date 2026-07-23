@@ -155,9 +155,9 @@ elif page == "📱 Pages":
                         st.error(f"Error creating page: {e}")
 
 # ============ TOKENS MANAGEMENT ============
+# ============ TOKENS MANAGEMENT ============
 elif page == "🔑 Tokens":
     st.markdown('<p class="main-header">🔑 Access Tokens</p>', unsafe_allow_html=True)
-    st.info("💡 Connect your Facebook and Instagram accounts to each page. OAuth auto-connect coming in Phase 2!")
     
     try:
         pages = db.get_all_pages()
@@ -173,41 +173,115 @@ elif page == "🔑 Tokens":
             if selected_page:
                 page_id = selected_page["id"]
                 
-                # Show existing tokens
+                # Get page with tokens
+                page_data = db.get_page_with_tokens(page_id)
+                tokens = page_data.get("tokens", [])
+                
+                # Show existing tokens with status
                 st.markdown(styles.create_section_header("Connected Accounts", "📋"), unsafe_allow_html=True)
-                tokens = db.get_tokens(page_id)
+                
                 if tokens:
                     for t in tokens:
                         platform_emoji = "📘" if t["platform"] == "facebook" else "📸" if t["platform"] == "instagram" else "📝"
-                        st.markdown(f"{platform_emoji} **{t['platform'].title()}** - External ID: `{t.get('external_id', 'N/A')}`")
-                        st.caption(f"Connected: {t['connected_at'].strftime('%Y-%m-%d %H:%M')}")
+                        
+                        with st.container():
+                            col1, col2, col3 = st.columns([3, 2, 1])
+                            
+                            with col1:
+                                st.markdown(f"### {platform_emoji} {t['platform'].title()}")
+                                st.caption(f"External ID: `{t.get('external_id', 'N/A')}`")
+                                st.caption(f"Connected: {t['connected_at'].strftime('%Y-%m-%d %H:%M')}")
+                            
+                            with col2:
+                                # Test connection button
+                                if st.button("🔍 Test Connection", key=f"test_{t['id']}"):
+                                    with st.spinner("Testing..."):
+                                        if t["platform"] == "facebook":
+                                            result = db.test_facebook_connection(t["access_token"], t["external_id"])
+                                        elif t["platform"] == "instagram":
+                                            # For Instagram, we need the Facebook token
+                                            fb_token = next((tok for tok in tokens if tok["platform"] == "facebook"), None)
+                                            if fb_token:
+                                                result = db.test_instagram_connection(fb_token["access_token"], t["external_id"])
+                                            else:
+                                                result = {"valid": False, "error": "Facebook token required for Instagram"}
+                                        else:
+                                            result = {"valid": True, "message": "Notion connection assumed valid"}
+                                        
+                                        if result["valid"]:
+                                            if t["platform"] == "facebook":
+                                                st.success(f"✅ Valid! Page: {result['page_name']}")
+                                            elif t["platform"] == "instagram":
+                                                st.success(f"✅ Valid! Username: @{result['username']}")
+                                            else:
+                                                st.success("✅ Valid!")
+                                        else:
+                                            st.error(f"❌ Invalid: {result['error']}")
+                            
+                            with col3:
+                                if st.button("🗑️ Remove", key=f"remove_{t['id']}"):
+                                    st.session_state.removing_token = t["id"]
+                            
+                            st.markdown("---")
                 else:
-                    st.info("No accounts connected yet.")
+                    st.info("No accounts connected yet. Add your first connection below!")
                 
                 st.markdown("---")
                 
                 # Add new token
                 st.markdown(styles.create_section_header("Connect New Account", "➕"), unsafe_allow_html=True)
+                
                 with st.form("add_token_form"):
                     platform = st.selectbox("Platform", ["facebook", "instagram", "notion"])
-                    access_token = st.text_input("Access Token *", type="password")
-                    external_id = st.text_input("External ID (Page ID / Account ID)", placeholder="e.g., 1201839566347724")
                     
-                    submitted = st.form_submit_button("💾 Save Token", use_container_width=True)
+                    if platform == "facebook":
+                        st.info("💡 Get your Page Access Token from [Graph API Explorer](https://developers.facebook.com/tools/explorer/)")
+                        access_token = st.text_input("Page Access Token *", type="password", help="Your permanent Facebook Page token")
+                        external_id = st.text_input("Facebook Page ID *", placeholder="e.g., 1201839566347724", help="Your Facebook Page ID (32-digit number)")
+                    elif platform == "instagram":
+                        st.info("💡 Get your Instagram Business Account ID from Graph API Explorer")
+                        access_token = st.text_input("Access Token *", type="password", help="Use the same Facebook Page token")
+                        external_id = st.text_input("Instagram Business Account ID *", placeholder="e.g., 17841443468123904", help="Your Instagram Business Account ID")
+                    else:
+                        access_token = st.text_input("Notion Integration Token *", type="password")
+                        external_id = st.text_input("Notion Database ID *", placeholder="e.g., abc123def456...")
+                    
+                    submitted = st.form_submit_button("💾 Save & Test Connection", use_container_width=True)
                     
                     if submitted:
-                        if not access_token:
-                            st.error("Access token is required!")
+                        if not access_token or not external_id:
+                            st.error("All fields are required!")
                         else:
-                            try:
-                                db.save_token(page_id, platform, access_token, external_id)
-                                st.success(f"✅ {platform.title()} token saved!")
-                                st.balloons()
-                            except Exception as e:
-                                st.error(f"Error saving token: {e}")
+                            with st.spinner("Testing connection..."):
+                                # Test before saving
+                                if platform == "facebook":
+                                    test_result = db.test_facebook_connection(access_token, external_id)
+                                elif platform == "instagram":
+                                    fb_token = next((t for t in tokens if t["platform"] == "facebook"), None)
+                                    if fb_token:
+                                        test_result = db.test_instagram_connection(fb_token["access_token"], external_id)
+                                    else:
+                                        test_result = {"valid": False, "error": "Please add Facebook token first"}
+                                else:
+                                    test_result = {"valid": True}
+                                
+                                if test_result["valid"]:
+                                    try:
+                                        db.save_token(page_id, platform, access_token, external_id)
+                                        if platform == "facebook":
+                                            st.success(f"✅ Connected to: {test_result['page_name']}")
+                                        elif platform == "instagram":
+                                            st.success(f"✅ Connected to: @{test_result['username']}")
+                                        else:
+                                            st.success("✅ Token saved successfully!")
+                                        st.balloons()
+                                    except Exception as e:
+                                        st.error(f"Error saving token: {e}")
+                                else:
+                                    st.error(f"❌ Connection failed: {test_result['error']}")
+                                    st.info("Please check your token and ID, then try again.")
     except Exception as e:
         st.error(f"Error: {e}")
-
 # ============ RUN HISTORY ============
 elif page == "📜 Run History":
     st.markdown('<p class="main-header">📜 Run History</p>', unsafe_allow_html=True)
