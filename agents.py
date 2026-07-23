@@ -106,35 +106,21 @@ def notion_headers():
     }
 
 def generate_blog_image(title, keywords):
-    """Generate a high-quality AI image with proper anatomy using Pollinations.ai."""
-    prompt = f"""Professional children's book illustration for a blog post titled: {title}. 
-    Theme keywords: {keywords}.
-    Style: Warm, whimsical, heartwarming digital illustration, Pixar-quality rendering.
-    Composition: Soft warm lighting, magical dreamy atmosphere, cozy bedtime scene, 
-    vibrant yet gentle colors, professional book cover quality.
-    Technical: Sharp focus, highly detailed, 4K quality, award-winning illustration, 
-    anatomically correct features, natural proportions, symmetrical composition, 
-    perfect facial features, correctly proportioned hands with five fingers each, 
-    well-defined objects, no distortion, clear details."""
+    """Generate a high-quality AI image with a shorter URL."""
+    # Shorter prompt (under 150 chars) to keep URL length manageable
+    prompt = f"Children's book illustration, {title[:80]}, warm colors, magical bedtime scene, Pixar style, high quality"
     
-    negative_prompt = """deformed, distorted, disfigured, poorly drawn, bad anatomy, 
-    wrong anatomy, extra limbs, missing limbs, floating limbs, mutated hands, 
-    extra fingers, missing fingers, fused fingers, malformed hands, bad hands, 
-    bad fingers, blurry, out of focus, low quality, ugly, disfigured face, 
-    asymmetrical face, cross-eyed, deformed eyes, mutation, mutilated, 
-    grainy, low resolution, poorly drawn face, poorly drawn hands"""
-    
+    # Clean up prompt (single line, no extra spaces)
     prompt = ' '.join(prompt.split())
-    negative_prompt = ' '.join(negative_prompt.split())
     
+    # URL encode
     encoded_prompt = requests.utils.quote(prompt)
-    encoded_negative = requests.utils.quote(negative_prompt)
     
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1536&height=1024&nologo=true&model=flux&enhance=true&negative_prompt={encoded_negative}&seed={hash(title) % 10000}"
+    # Shorter URL without negative_prompt parameter
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=800&nologo=true&seed={hash(title) % 10000}"
     
-    print(f"🎨 Generated high-quality blog image")
+    print(f"🎨 Generated blog image")
     return image_url
-
 def convert_text_to_notion_blocks(text):
     blocks = []
     paragraphs = text.split('\n\n')
