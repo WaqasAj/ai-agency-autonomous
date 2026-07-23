@@ -106,20 +106,19 @@ def notion_headers():
     }
 
 def generate_blog_image(title, keywords):
-    """Generate a high-quality AI image using Pollinations.ai with Flux model."""
-    # Optimized prompt for children's book style
-    prompt = f"Children's book illustration, {title[:80]}, warm magical colors, cozy bedtime atmosphere, whimsical style, professional quality, detailed"
+    """Generate a 3D Pixar-style cartoon image using Pollinations.ai."""
+    # Optimized prompt for 3D Pixar cartoon style
+    prompt = f"3D Pixar style cartoon, {title[:80]}, cute characters, vibrant colors, Disney Pixar animation style, 3D rendered, professional quality, warm lighting, detailed textures, family-friendly"
     
     # Clean up prompt
     prompt = ' '.join(prompt.split())
     encoded_prompt = requests.utils.quote(prompt)
     
-    # Use flux-realism model for better quality
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=800&nologo=true&model=flux-realism&seed={hash(title) % 10000}"
+    # Use flux-3d model for 3D cartoon style
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=800&nologo=true&model=flux-3d&seed={hash(title) % 10000}"
     
-    print(f"🎨 Generated high-quality blog image")
+    print(f"🎨 Generated 3D Pixar-style cartoon image")
     return image_url
-
 def convert_text_to_notion_blocks(text):
     """Convert plain text blog content to Notion blocks."""
     blocks = []
