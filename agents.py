@@ -936,7 +936,8 @@ FOUNDER'S STRATEGY (you MUST enforce this):
         )
         
         if page_id:
-            auto_publish_blog(page_id)
+            #auto_publish_blog(page_id)
+            print(f"⏸️ Blog saved as DRAFT (auto-publish disabled)")
             return {
                 "title": title, 
                 "page_id": page_id, 
