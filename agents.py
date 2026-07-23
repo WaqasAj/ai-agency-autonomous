@@ -3,7 +3,7 @@ import requests
 import re
 import time
 from crewai import Agent, Task, Crew, Process
-from datetime import datetime
+from datetime import datetime, timedelta
 import litellm
 
 # ============ THE FIX: Strip cache_breakpoint from every API call ============
@@ -32,6 +32,8 @@ MISTRAL_KEY = os.getenv("MISTRAL_API_KEY")
 FB_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
 FB_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
 IG_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID")
+STRATEGY_DB_ID = os.getenv("STRATEGY_DB_ID")
+MEMORY_DB_ID = os.getenv("MEMORY_DB_ID")
 
 os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
 
@@ -105,24 +107,212 @@ def notion_headers():
         "Content-Type": "application/json"
     }
 
+# ============ STRATEGY & MEMORY DATABASE FUNCTIONS ============
+def fetch_active_strategy():
+    """Fetch the active strategy from the Strategy database."""
+    if not STRATEGY_DB_ID:
+        print("⚠️ STRATEGY_DB_ID not set. Skipping strategy fetch.")
+        return None
+    
+    url = f"https://api.notion.com/v1/databases/{STRATEGY_DB_ID}/query"
+    payload = {
+        "filter": {"property": "Status", "select": {"equals": "Active"}}
+    }
+    
+    response = requests.post(url, headers=notion_headers(), json=payload)
+    
+    if response.status_code == 200:
+        results = response.json().get("results", [])
+        if results:
+            strategy = results[0]["properties"]
+            return {
+                "goal": strategy.get("Goal", {}).get("title", [{}])[0].get("text", {}).get("content", ""),
+                "target_audience": strategy.get("Target Audience", {}).get("rich_text", [{}])[0].get("text", {}).get("content", ""),
+                "content_pillars": [p["name"] for p in strategy.get("Content Pillars", {}).get("multi_select", [])],
+                "tone": strategy.get("Tone", {}).get("select", {}).get("name", ""),
+                "weekly_target": strategy.get("Weekly Target", {}).get("number", 0),
+                "current_priority": strategy.get("Current Priority", {}).get("select", {}).get("name", ""),
+                "brand_rules": strategy.get("Brand Rules", {}).get("rich_text", [{}])[0].get("text", {}).get("content", "")
+            }
+    
+    print(f"⚠️ Failed to fetch strategy: {response.status_code}")
+    return None
+
+def fetch_relevant_memories(memory_type=None, outcome=None, limit=10):
+    """Fetch relevant memories from the Memory database."""
+    if not MEMORY_DB_ID:
+        print("⚠️ MEMORY_DB_ID not set. Skipping memory fetch.")
+        return []
+    
+    url = f"https://api.notion.com/v1/databases/{MEMORY_DB_ID}/query"
+    
+    # Build filter
+    filters = []
+    if memory_type:
+        filters.append({"property": "Type", "select": {"equals": memory_type}})
+    if outcome:
+        filters.append({"property": "Outcome", "select": {"equals": outcome}})
+    
+    payload = {
+        "filter": {"and": filters} if filters else {},
+        "sorts": [{"property": "Confidence", "direction": "descending"}],
+        "page_size": limit
+    }
+    
+    response = requests.post(url, headers=notion_headers(), json=payload)
+    
+    memories = []
+    if response.status_code == 200:
+        results = response.json().get("results", [])
+        for result in results:
+            props = result["properties"]
+            memories.append({
+                "summary": props.get("Summary", {}).get("title", [{}])[0].get("text", {}).get("content", ""),
+                "type": props.get("Type", {}).get("select", {}).get("name", ""),
+                "content": props.get("Content", {}).get("rich_text", [{}])[0].get("text", {}).get("content", ""),
+                "outcome": props.get("Outcome", {}).get("select", {}).get("name", ""),
+                "reason": props.get("Reason", {}).get("rich_text", [{}])[0].get("text", {}).get("content", ""),
+                "confidence": props.get("Confidence", {}).get("number", 5)
+            })
+    
+    return memories
+
+def save_to_memory(summary, memory_type, content, outcome, reason, confidence=5):
+    """Save a new memory to the Memory database."""
+    if not MEMORY_DB_ID:
+        print("⚠️ MEMORY_DB_ID not set. Skipping memory save.")
+        return None
+    
+    url = "https://api.notion.com/v1/pages"
+    payload = {
+        "parent": {"database_id": MEMORY_DB_ID},
+        "properties": {
+            "Summary": {"title": [{"text": {"content": summary[:100]}}]},
+            "Type": {"select": {"name": memory_type}},
+            "Content": {"rich_text": [{"text": {"content": content[:2000]}}]},
+            "Outcome": {"select": {"name": outcome}},
+            "Reason": {"rich_text": [{"text": {"content": reason[:500]}}]},
+            "Confidence": {"number": confidence},
+            "Date": {"date": {"start": datetime.now().isoformat()}},
+            "App Name": {"select": {"name": "Kahani AI"}}
+        }
+    }
+    
+    response = requests.post(url, headers=notion_headers(), json=payload)
+    
+    if response.status_code == 200:
+        print(f"✅ Saved to memory: {summary}")
+        return response.json()["id"]
+    else:
+        print(f"❌ Failed to save memory: {response.status_code} - {response.text}")
+        return None
+
+def generate_weekly_report():
+    """Generate a weekly performance report and save to Notion."""
+    if not MEMORY_DB_ID:
+        return
+    
+    # Fetch memories from the last 7 days
+    url = f"https://api.notion.com/v1/databases/{MEMORY_DB_ID}/query"
+    seven_days_ago = (datetime.now() - timedelta(days=7)).isoformat()
+    
+    payload = {
+        "filter": {
+            "property": "Date",
+            "date": {"on_or_after": seven_days_ago}
+        }
+    }
+    
+    response = requests.post(url, headers=notion_headers(), json=payload)
+    
+    if response.status_code != 200:
+        print(f"⚠️ Failed to fetch memories for report: {response.status_code}")
+        return
+    
+    results = response.json().get("results", [])
+    
+    # Analyze the data
+    total_memories = len(results)
+    successes = sum(1 for r in results if r["properties"].get("Outcome", {}).get("select", {}).get("name") == "Success")
+    failures = total_memories - successes
+    
+    # Count by type
+    type_counts = {}
+    for r in results:
+        mem_type = r["properties"].get("Type", {}).get("select", {}).get("name", "Unknown")
+        type_counts[mem_type] = type_counts.get(mem_type, 0) + 1
+    
+    # Generate report
+    report = f"""📊 WEEKLY AGENCY PERFORMANCE REPORT
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+📈 OVERALL STATS
+================
+Total Learnings: {total_memories}
+✅ Successes: {successes}
+❌ Failures: {failures}
+Success Rate: {(successes/total_memories*100 if total_memories > 0 else 0):.1f}%
+
+📋 BREAKDOWN BY TYPE
+====================
+"""
+    for mem_type, count in type_counts.items():
+        report += f"• {mem_type}: {count}\n"
+    
+    report += f"""
+🎯 KEY INSIGHTS
+===============
+• Most common learning type: {max(type_counts, key=type_counts.get) if type_counts else 'N/A'}
+• Agent performance: {'Improving' if successes > failures else 'Needs attention'}
+• Memory database health: {'✅ Active' if total_memories > 0 else '⚠️ Empty'}
+
+💡 RECOMMENDATIONS
+==================
+• Review failed patterns and adjust writer guidelines
+• Reinforce successful patterns in CEO review criteria
+• Consider adjusting strategy if success rate < 70%
+
+---
+This report is auto-generated by the Kahani AI Autonomous Agency.
+"""
+    
+    # Save report to Notion (in the main blog database as a log)
+    url = "https://api.notion.com/v1/pages"
+    payload = {
+        "parent": {"database_id": NOTION_DB_ID},
+        "properties": {
+            "Title": {"title": [{"text": {"content": f"📊 Weekly Report - {datetime.now().strftime('%Y-%m-%d')}"}}]},
+            "Content": {"rich_text": [{"text": {"content": report[:2000]}}]},
+            "Published": {"checkbox": False},
+            "Blog Source": {"select": {"name": "System Report"}}
+        }
+    }
+    
+    response = requests.post(url, headers=notion_headers(), json=payload)
+    
+    if response.status_code == 200:
+        print(f"✅ Weekly report saved to Notion")
+    else:
+        print(f"❌ Failed to save weekly report: {response.status_code}")
+
 def generate_blog_image(title, keywords):
     """Generate a 3D Pixar-style cartoon image with a clean, short URL for Instagram."""
-    # 1. Strip ALL special characters and limit length to keep the URL very short
+    # Strip ALL special characters and limit length to keep the URL very short
     clean_title = re.sub(r'[^a-zA-Z0-9\s]', '', title)[:35]
     
-    # 2. Create a simple, punchy prompt without complex punctuation
+    # Create a simple, punchy prompt without complex punctuation
     prompt = f"3D Pixar style cartoon, {clean_title}, cute, vibrant colors, family friendly"
     
-    # 3. Clean up extra spaces
+    # Clean up extra spaces
     prompt = ' '.join(prompt.split())
     encoded_prompt = requests.utils.quote(prompt)
     
-    # 4. Use standard 'flux' model (excellent at 3D) with minimal, clean parameters
-    # (Removed 'model=flux-3d' as it's not a standard endpoint, 'flux' handles 3D perfectly)
+    # Use standard 'flux' model with minimal, clean parameters
     image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=800&nologo=true&seed={hash(title) % 10000}"
     
     print(f"🎨 Generated 3D Pixar-style cartoon image")
     return image_url
+
 def convert_text_to_notion_blocks(text):
     """Convert plain text blog content to Notion blocks."""
     blocks = []
@@ -133,58 +323,18 @@ def convert_text_to_notion_blocks(text):
         if not para:
             continue
         
-        # Check if it's a heading (starts with #)
         if para.startswith('### '):
-            blocks.append({
-                "object": "block",
-                "type": "heading_3",
-                "heading_3": {
-                    "rich_text": [{"type": "text", "text": {"content": para.replace('### ', '')}}]
-                }
-            })
+            blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"type": "text", "text": {"content": para.replace('### ', '')}}]}})
         elif para.startswith('## '):
-            blocks.append({
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": para.replace('## ', '')}}]
-                }
-            })
+            blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": para.replace('## ', '')}}]}})
         elif para.startswith('# '):
-            blocks.append({
-                "object": "block",
-                "type": "heading_1",
-                "heading_1": {
-                    "rich_text": [{"type": "text", "text": {"content": para.replace('# ', '')}}]
-                }
-            })
-        # Check if it's a bullet point
+            blocks.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": [{"type": "text", "text": {"content": para.replace('# ', '')}}]}})
         elif para.startswith('- ') or para.startswith('* '):
-            blocks.append({
-                "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {
-                    "rich_text": [{"type": "text", "text": {"content": para[2:]}}]
-                }
-            })
-        # Check if it's a numbered list
+            blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"type": "text", "text": {"content": para[2:]}}]}})
         elif re.match(r'^\d+\. ', para):
-            blocks.append({
-                "object": "block",
-                "type": "numbered_list_item",
-                "numbered_list_item": {
-                    "rich_text": [{"type": "text", "text": {"content": re.sub(r'^\d+\. ', '', para)}}]
-                }
-            })
-        # Regular paragraph
+            blocks.append({"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": [{"type": "text", "text": {"content": re.sub(r'^\d+\. ', '', para)}}]}})
         else:
-            blocks.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": para}}]
-                }
-            })
+            blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": para}}]}})
     
     return blocks
 
@@ -192,11 +342,8 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
     """Create a Notion page with properties (excerpt) and body (full content + image)."""
     url = "https://api.notion.com/v1/pages"
     
-    # Clean title and content
     clean_t = clean_title(title)
     clean_content = clean_blog_content(full_blog_content, clean_t)
-    
-    # Extract excerpt (first 500 chars for the Content property)
     excerpt = clean_content[:500] if clean_content else ""
     
     payload = {
@@ -211,25 +358,12 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
             "Blog Source": {"select": {"name": "AI Generated"}}
         },
         "children": [
-            # Generated image at top
-            {
-                "object": "block",
-                "type": "image",
-                "image": {
-                    "type": "external",
-                    "external": {"url": image_url}
-                }
-            },
-            # Full blog content as Notion blocks
+            {"object": "block", "type": "image", "image": {"type": "external", "external": {"url": image_url}}},
             *convert_text_to_notion_blocks(clean_content)
         ]
     }
     
     print(f"\n📝 Creating Notion page...")
-    print(f"   Title: {clean_t}")
-    print(f"   Excerpt: {len(excerpt)} chars")
-    print(f"   Full content: {len(clean_content)} chars")
-    
     response = requests.post(url, headers=notion_headers(), json=payload)
     
     if response.status_code == 200:
@@ -237,8 +371,7 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
         print(f"✅ Created Notion page: {clean_t}")
         return page_id
     else:
-        print(f"❌ Failed to create page: {response.status_code}")
-        print(f"   Error: {response.text}")
+        print(f"❌ Failed to create page: {response.status_code} - {response.text}")
         return None
 
 def fetch_unprocessed_published_blogs():
@@ -261,17 +394,14 @@ def fetch_unprocessed_published_blogs():
     blogs = []
     for result in data.get("results", []):
         title = result["properties"]["Title"]["title"][0]["text"]["content"] if result["properties"]["Title"]["title"] else "Untitled"
-        
         content = ""
         if "Content" in result["properties"] and result["properties"]["Content"]["type"] == "rich_text":
             if result["properties"]["Content"]["rich_text"]:
                 content = result["properties"]["Content"]["rich_text"][0]["text"]["content"]
-        
         meta = ""
         if "Meta Description" in result["properties"] and result["properties"]["Meta Description"]["type"] == "rich_text":
             if result["properties"]["Meta Description"]["rich_text"]:
                 meta = result["properties"]["Meta Description"]["rich_text"][0]["text"]["content"]
-        
         keywords = ""
         if "Keywords" in result["properties"] and result["properties"]["Keywords"]["type"] == "rich_text":
             if result["properties"]["Keywords"]["rich_text"]:
@@ -298,8 +428,7 @@ def auto_publish_blog(page_id):
         print(f"✅ AUTO-PUBLISHED blog to website!")
         return True
     else:
-        print(f"❌ Failed to publish: {response.status_code}")
-        print(f"   Error: {response.text}")
+        print(f"❌ Failed to publish: {response.status_code} - {response.text}")
         return False
 
 def update_social_status(page_id, status):
@@ -337,11 +466,9 @@ def log_to_notion(blog_title, agent_output):
 def create_instagram_caption(title, content, keywords):
     """Create an Instagram-optimized caption (max 2200 chars)."""
     clean_t = clean_title(title)
-    # Extract first 2-3 paragraphs as caption base
     paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()][:3]
     intro = ' '.join(paragraphs)[:800]
     
-    # Add hashtags
     keyword_list = [k.strip().replace(' ', '') for k in keywords.split(',')[:8]]
     hashtags = ' '.join([f'#{k}' for k in keyword_list])
     
@@ -357,7 +484,6 @@ def create_instagram_caption(title, content, keywords):
 
 #KahaniAI #BedtimeStories #ParentingTips #KidsStories"""
     
-    # Ensure under 2200 chars
     if len(caption) > 2200:
         caption = caption[:2197] + "..."
     
@@ -390,7 +516,6 @@ def post_to_instagram(image_url, caption):
     
     print(f"\n📸 Posting to Instagram...")
     
-    # Step 1: Create media container
     container_url = f"https://graph.facebook.com/v19.0/{IG_ACCOUNT_ID}/media"
     container_payload = {
         "image_url": image_url,
@@ -408,10 +533,8 @@ def post_to_instagram(image_url, caption):
     container_id = response.json().get("id")
     print(f"✅ Instagram container created: {container_id}")
     
-    # Wait a few seconds for Instagram to process the image
     time.sleep(5)
     
-    # Step 2: Check container status
     status_url = f"https://graph.facebook.com/v19.0/{container_id}"
     status_params = {"fields": "status_code", "access_token": FB_ACCESS_TOKEN}
     status_response = requests.get(status_url, params=status_params)
@@ -422,7 +545,6 @@ def post_to_instagram(image_url, caption):
             print(f"⚠️ Container status: {status}. Waiting longer...")
             time.sleep(10)
     
-    # Step 3: Publish the container
     publish_url = f"https://graph.facebook.com/v19.0/{IG_ACCOUNT_ID}/media_publish"
     publish_payload = {
         "creation_id": container_id,
@@ -448,11 +570,10 @@ def post_to_facebook(image_url, caption):
     
     print(f"\n📘 Posting to Facebook...")
     
-    # Use /photos endpoint to upload image directly (not as a link)
     post_url = f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/photos"
     post_payload = {
         "message": caption,
-        "url": image_url,  # Direct image upload
+        "url": image_url,
         "access_token": FB_ACCESS_TOKEN
     }
     
@@ -583,10 +704,29 @@ def run_blog_creation_phase():
     print("📝 PHASE 1: BLOG CREATION (with CEO feedback loop)")
     print("="*60)
     
+    # Fetch strategy and memories
+    strategy = fetch_active_strategy()
+    if strategy:
+        print(f"\n🎯 Active Strategy: {strategy['goal']}")
+        print(f"👥 Target Audience: {strategy['target_audience']}")
+        print(f"📊 Priority: {strategy['current_priority']}")
+    
+    # Fetch relevant memories for the writer
+    failure_memories = fetch_relevant_memories(outcome="Failure", limit=5)
+    success_memories = fetch_relevant_memories(outcome="Success", limit=5)
+    
+    if failure_memories:
+        print(f"\n⚠️ Loaded {len(failure_memories)} past failures to avoid")
+    if success_memories:
+        print(f"✅ Loaded {len(success_memories)} past successes to follow")
+    
     research_task = Task(
         description=f"""Research ONE trending blog topic perfect for Kahani AI's audience.
         Consider: bedtime routines, multilingual education, screen-free activities, 
         cultural stories, child development, Islamic stories for kids.
+        
+        {f"STRATEGY GUIDANCE: Focus on {strategy['current_priority']} priority. Target: {strategy['target_audience']}. Content pillars: {', '.join(strategy['content_pillars'])}." if strategy else ""}
+        
         Output ONLY the blog topic/title as plain text, no quotes, no markdown, nothing else.""",
         expected_output="A single compelling blog topic/title as plain text",
         agent=trend_researcher
@@ -614,6 +754,18 @@ def run_blog_creation_phase():
         print(f"📝 ATTEMPT {attempt}/{MAX_REVISIONS}")
         print(f"{'='*40}")
         
+        # Build memory context for writer
+        memory_context = ""
+        if failure_memories:
+            memory_context += "\n\nAVOID THESE PAST FAILURES:\n"
+            for mem in failure_memories[:3]:
+                memory_context += f"- {mem['summary']}: {mem['reason']}\n"
+        
+        if success_memories:
+            memory_context += "\n\nFOLLOW THESE PAST SUCCESSES:\n"
+            for mem in success_memories[:3]:
+                memory_context += f"- {mem['summary']}: {mem['content'][:100]}\n"
+        
         if ceo_feedback:
             write_description = f"""REVISE the blog post based on CEO feedback.
             
@@ -624,6 +776,7 @@ Fix ALL the issues mentioned. Apply every specific change requested.
 Maintain the same topic: {title}
 
 {HUMANIZATION_RULES}
+{memory_context}
 
 Output ONLY the revised blog post (800-1200 words). Do NOT repeat the title at the top. 
 Start directly with the introduction paragraph. Use ## for section headings."""
@@ -631,6 +784,7 @@ Start directly with the introduction paragraph. Use ## for section headings."""
             write_description = f"""Write a complete, engaging blog post (800-1200 words) on this topic: {title}
 
 {HUMANIZATION_RULES}
+{memory_context}
 
 Make it warm, practical, and parent-friendly. Naturally mention how Kahani AI can help.
 CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use ## for section headings, 
@@ -661,14 +815,27 @@ Use ## for section headings (not #)."""
             agent=seo_geo_optimizer
         )
         
+        # Build strategy context for CEO
+        strategy_context = ""
+        if strategy:
+            strategy_context = f"""
+FOUNDER'S STRATEGY (you MUST enforce this):
+- Goal: {strategy['goal']}
+- Target Audience: {strategy['target_audience']}
+- Current Priority: {strategy['current_priority']}
+- Brand Rules: {strategy['brand_rules']}
+"""
+        
         review_task = Task(
-            description="""Review the blog post rigorously against ALL criteria:
+            description=f"""Review the blog post rigorously against ALL criteria:
         - HUMANIZATION (most important): Does it sound like a real parent? Check for AI clichés.
         - Child-safety and family-friendliness
         - Cultural sensitivity (multilingual audience)
         - Brand voice alignment (warm, trustworthy, real)
         - Genuine value to parents
         - GEO/SEO structure (clear headings, direct answers)
+        
+        {strategy_context}
         
         Output in EXACT format:
         DECISION: APPROVED or REJECTED
@@ -702,6 +869,16 @@ Use ## for section headings (not #)."""
             final_blog_content = blog_content
             final_seo_output = seo_output
             final_ceo_decision = ceo_decision
+            
+            # Save success to memory
+            save_to_memory(
+                summary=f"Approved: {title}",
+                memory_type="Pattern",
+                content=f"Blog approved on attempt {attempt}. CEO feedback: {ceo_decision[:200]}",
+                outcome="Success",
+                reason="Met all quality standards",
+                confidence=7
+            )
             break
         else:
             print(f"\n❌ CEO REJECTED on attempt {attempt}. Extracting feedback...")
@@ -709,6 +886,16 @@ Use ## for section headings (not #)."""
             final_blog_content = blog_content
             final_seo_output = seo_output
             final_ceo_decision = ceo_decision
+            
+            # Save failure to memory
+            save_to_memory(
+                summary=f"Rejected: {title[:50]}",
+                memory_type="Feedback",
+                content=ceo_decision[:500],
+                outcome="Failure",
+                reason="Did not meet CEO standards",
+                confidence=6
+            )
             
             if attempt < MAX_REVISIONS:
                 print(f"🔄 Sending feedback to writer for revision...")
@@ -814,7 +1001,6 @@ Content preview: {blog['content'][:1500]}
         
         result = crew.kickoff()
         
-        # ===== ACTUAL POSTING TO FACEBOOK & INSTAGRAM =====
         # Generate image for the post
         image_url = generate_blog_image(blog['title'], blog['keywords'])
         
@@ -872,6 +1058,14 @@ def run_daily_agency():
         run_social_promotion_phase()
     except Exception as e:
         print(f"⚠️ Social promotion phase error: {e}")
+    
+    # Generate weekly report on Sundays
+    if datetime.now().weekday() == 6:  # Sunday
+        try:
+            print("\n📊 Generating weekly performance report...")
+            generate_weekly_report()
+        except Exception as e:
+            print(f"⚠️ Weekly report error: {e}")
     
     print("\n🎉 Daily agency run complete!")
 
