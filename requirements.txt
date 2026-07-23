@@ -1,4 +1,5 @@
 crewai
-python-dotenv
-requests
 litellm
+requests
+psycopg2-binary
+streamlit
