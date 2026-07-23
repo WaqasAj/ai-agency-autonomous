@@ -2,8 +2,8 @@ name: Daily Autonomous Agents
 
 on:
   schedule:
-    # Runs at 10:00 AM UTC every day
-    - cron: '1 0 * * *'
+    # Runs at 09:00 AM UTC every day (02:00 PM PST)
+    - cron: '0 9 * * *'
   workflow_dispatch: # Allows manual trigger
 
 jobs:
