@@ -2,6 +2,7 @@ import streamlit as st
 import database as db
 import requests
 import os
+import styles
 from datetime import datetime
 
 # ============ PAGE CONFIG ============
@@ -13,30 +14,8 @@ st.set_page_config(
 )
 
 # ============ CUSTOM STYLES ============
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        margin-bottom: 1rem;
-    }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-    }
-    .page-card {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-left: 5px solid #1f77b4;
-        margin-bottom: 1rem;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.markdown(styles.load_css(), unsafe_allow_html=True)
+
 
 # ============ SIDEBAR ============
 st.sidebar.title("🎨 Kahani AI Agency")
@@ -63,17 +42,17 @@ if page == "📊 Dashboard":
         recent_runs = db.get_run_history(limit=10)
         successful_runs = sum(1 for r in recent_runs if r["status"] == "success")
         
-        # Metrics row
+        # Metrics row with styled cards
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("Total Pages", total_pages)
+            st.markdown(styles.create_metric_card(total_pages, "Total Pages", "📱"), unsafe_allow_html=True)
         with col2:
-            st.metric("Active Pages", active_pages)
+            st.markdown(styles.create_metric_card(active_pages, "Active Pages", "✅"), unsafe_allow_html=True)
         with col3:
-            st.metric("Recent Runs", len(recent_runs))
+            st.markdown(styles.create_metric_card(len(recent_runs), "Recent Runs", "🚀"), unsafe_allow_html=True)
         with col4:
             success_rate = (successful_runs / len(recent_runs) * 100) if recent_runs else 0
-            st.metric("Success Rate", f"{success_rate:.0f}%")
+            st.markdown(styles.create_metric_card(f"{success_rate:.0f}%", "Success Rate", "📈"), unsafe_allow_html=True)
         
         st.markdown("---")
         
@@ -81,8 +60,27 @@ if page == "📊 Dashboard":
         st.subheader("📱 Your Pages")
         if pages:
             for p in pages:
-                with st.container():
-                    col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+                st.markdown(
+                    styles.create_page_card(
+                        p['name'],
+                        p.get('niche', 'No niche'),
+                        p['status'],
+                        p['created_at'].strftime('%Y-%m-%d')
+                    ),
+                    unsafe_allow_html=True
+                )
+                
+                # Action buttons
+                b1, b2, b3 = st.columns(3)
+                with b1:
+                    if st.button("🚀 Run Now", key=f"run_{p['id']}"):
+                        st.info("Workflow trigger coming in Phase 3!")
+                with b2:
+                    if st.button("✏️ Edit", key=f"edit_{p['id']}"):
+                        st.session_state.editing_page = p["id"]
+                with b3:
+                    if st.button("🗑️ Delete", key=f"del_{p['id']}"):
+                        st.session_state.deleting_page = p["id"]
                     with col1:
                         st.markdown(f"**{p['name']}**")
                         st.caption(p.get('niche', 'No niche'))
