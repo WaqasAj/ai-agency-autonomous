@@ -119,10 +119,81 @@ def generate_blog_image(title, keywords):
     
     print(f"🎨 Generated high-quality blog image")
     return image_url
+
+def convert_text_to_notion_blocks(text):
+    """Convert plain text blog content to Notion blocks."""
+    blocks = []
+    paragraphs = text.split('\n\n')
+    
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        
+        # Check if it's a heading (starts with #)
+        if para.startswith('### '):
+            blocks.append({
+                "object": "block",
+                "type": "heading_3",
+                "heading_3": {
+                    "rich_text": [{"type": "text", "text": {"content": para.replace('### ', '')}}]
+                }
+            })
+        elif para.startswith('## '):
+            blocks.append({
+                "object": "block",
+                "type": "heading_2",
+                "heading_2": {
+                    "rich_text": [{"type": "text", "text": {"content": para.replace('## ', '')}}]
+                }
+            })
+        elif para.startswith('# '):
+            blocks.append({
+                "object": "block",
+                "type": "heading_1",
+                "heading_1": {
+                    "rich_text": [{"type": "text", "text": {"content": para.replace('# ', '')}}]
+                }
+            })
+        # Check if it's a bullet point
+        elif para.startswith('- ') or para.startswith('* '):
+            blocks.append({
+                "object": "block",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {
+                    "rich_text": [{"type": "text", "text": {"content": para[2:]}}]
+                }
+            })
+        # Check if it's a numbered list
+        elif re.match(r'^\d+\. ', para):
+            blocks.append({
+                "object": "block",
+                "type": "numbered_list_item",
+                "numbered_list_item": {
+                    "rich_text": [{"type": "text", "text": {"content": re.sub(r'^\d+\. ', '', para)}}]
+                }
+            })
+        # Regular paragraph
+        else:
+            blocks.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": [{"type": "text", "text": {"content": para}}]
+                }
+            })
+    
+    return blocks
+
 def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url):
+    """Create a Notion page with properties (excerpt) and body (full content + image)."""
     url = "https://api.notion.com/v1/pages"
+    
+    # Clean title and content
     clean_t = clean_title(title)
     clean_content = clean_blog_content(full_blog_content, clean_t)
+    
+    # Extract excerpt (first 500 chars for the Content property)
     excerpt = clean_content[:500] if clean_content else ""
     
     payload = {
@@ -137,12 +208,25 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
             "Blog Source": {"select": {"name": "AI Generated"}}
         },
         "children": [
-            {"object": "block", "type": "image", "image": {"type": "external", "external": {"url": image_url}}},
+            # Generated image at top
+            {
+                "object": "block",
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {"url": image_url}
+                }
+            },
+            # Full blog content as Notion blocks
             *convert_text_to_notion_blocks(clean_content)
         ]
     }
     
     print(f"\n📝 Creating Notion page...")
+    print(f"   Title: {clean_t}")
+    print(f"   Excerpt: {len(excerpt)} chars")
+    print(f"   Full content: {len(clean_content)} chars")
+    
     response = requests.post(url, headers=notion_headers(), json=payload)
     
     if response.status_code == 200:
@@ -150,10 +234,12 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
         print(f"✅ Created Notion page: {clean_t}")
         return page_id
     else:
-        print(f"❌ Failed to create page: {response.status_code} - {response.text}")
+        print(f"❌ Failed to create page: {response.status_code}")
+        print(f"   Error: {response.text}")
         return None
 
 def fetch_unprocessed_published_blogs():
+    """Fetch blogs that are published but not yet promoted on social media."""
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     payload = {
         "filter": {
@@ -172,14 +258,17 @@ def fetch_unprocessed_published_blogs():
     blogs = []
     for result in data.get("results", []):
         title = result["properties"]["Title"]["title"][0]["text"]["content"] if result["properties"]["Title"]["title"] else "Untitled"
+        
         content = ""
         if "Content" in result["properties"] and result["properties"]["Content"]["type"] == "rich_text":
             if result["properties"]["Content"]["rich_text"]:
                 content = result["properties"]["Content"]["rich_text"][0]["text"]["content"]
+        
         meta = ""
         if "Meta Description" in result["properties"] and result["properties"]["Meta Description"]["type"] == "rich_text":
             if result["properties"]["Meta Description"]["rich_text"]:
                 meta = result["properties"]["Meta Description"]["rich_text"][0]["text"]["content"]
+        
         keywords = ""
         if "Keywords" in result["properties"] and result["properties"]["Keywords"]["type"] == "rich_text":
             if result["properties"]["Keywords"]["rich_text"]:
@@ -195,20 +284,26 @@ def fetch_unprocessed_published_blogs():
     return blogs
 
 def auto_publish_blog(page_id):
+    """Check the Published box to push blog live on website."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
     payload = {"properties": {"Published": {"checkbox": True}}}
+    
     print(f"🚀 Publishing blog to website...")
     response = requests.patch(url, headers=notion_headers(), json=payload)
+    
     if response.status_code == 200:
         print(f"✅ AUTO-PUBLISHED blog to website!")
         return True
     else:
-        print(f"❌ Failed to publish: {response.status_code} - {response.text}")
+        print(f"❌ Failed to publish: {response.status_code}")
+        print(f"   Error: {response.text}")
         return False
 
 def update_social_status(page_id, status):
+    """Update the Status column (type: status, not select)."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
     payload = {"properties": {"Status": {"status": {"name": status}}}}
+    
     response = requests.patch(url, headers=notion_headers(), json=payload)
     if response.status_code == 200:
         print(f"✅ Updated Status to: {status}")
@@ -216,9 +311,11 @@ def update_social_status(page_id, status):
         print(f"⚠️ Failed to update Status: {response.status_code} - {response.text}")
 
 def log_to_notion(blog_title, agent_output):
+    """Create a log entry showing what the agents did."""
     url = "https://api.notion.com/v1/pages"
     truncated = str(agent_output)[:2000]
     clean_t = clean_title(blog_title)
+    
     payload = {
         "parent": {"database_id": NOTION_DB_ID},
         "properties": {
@@ -361,25 +458,6 @@ def post_to_facebook(image_url, caption):
     if response.status_code == 200:
         post_id = response.json().get("id")
         print(f"✅ Posted to Facebook! Photo ID: {post_id}")
-        return post_id
-    else:
-        print(f"❌ Failed to post to Facebook: {response.status_code}")
-        print(f"   Error: {response.text}")
-        return None    
-    print(f"\n📘 Posting to Facebook...")
-    
-    post_url = f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/feed"
-    post_payload = {
-        "message": caption,
-        "link": image_url,  # Attach the image
-        "access_token": FB_ACCESS_TOKEN
-    }
-    
-    response = requests.post(post_url, data=post_payload)
-    
-    if response.status_code == 200:
-        post_id = response.json().get("id")
-        print(f"✅ Posted to Facebook! Post ID: {post_id}")
         return post_id
     else:
         print(f"❌ Failed to post to Facebook: {response.status_code}")
