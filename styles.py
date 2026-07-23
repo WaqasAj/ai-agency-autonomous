@@ -121,30 +121,54 @@ def load_css():
     }
     
     /* ============ SIDEBAR ============ */
+        /* ============ SIDEBAR ============ */
     [data-testid="stSidebar"] {
         background: #1e293b;
     }
     
     [data-testid="stSidebar"] .stMarkdown {
-        color: #f1f5f9;
+        color: #ffffff !important;
     }
     
-    [data-testid="stSidebar"] h1 {
-        color: #f1f5f9;
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #ffffff !important;
         font-weight: 700;
     }
     
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] label {
+        color: #f1f5f9 !important;
+    }
+    
     [data-testid="stSidebar"] .stRadio label {
-        color: #cbd5e1 !important;
+        color: #f1f5f9 !important;
         font-size: 1rem;
         padding: 0.5rem 1rem;
         border-radius: 8px;
         transition: all 0.2s ease;
+        font-weight: 500;
     }
     
     [data-testid="stSidebar"] .stRadio label:hover {
-        background: rgba(59, 130, 246, 0.1);
+        background: rgba(59, 130, 246, 0.2);
+        color: #ffffff !important;
+    }
+    
+    [data-testid="stSidebar"] .stRadio label[data-baseweb="radio"] {
         color: #f1f5f9 !important;
+    }
+    
+    [data-testid="stSidebar"] hr {
+        background: rgba(255, 255, 255, 0.2);
+    }
+    
+    [data-testid="stSidebar"] .stAlert {
+        background: rgba(255, 255, 255, 0.1);
+        color: #f1f5f9 !important;
+        border-color: #3b82f6;
     }
     
     /* ============ TABS ============ */
