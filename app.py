@@ -1,8 +1,8 @@
 import streamlit as st
 import database as db
+import styles
 import requests
 import os
-import styles
 from datetime import datetime
 
 # ============ PAGE CONFIG ============
@@ -13,9 +13,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ============ CUSTOM STYLES ============
+# ============ LOAD STYLES ============
 st.markdown(styles.load_css(), unsafe_allow_html=True)
-
 
 # ============ SIDEBAR ============
 st.sidebar.title("🎨 Kahani AI Agency")
@@ -27,7 +26,7 @@ page = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.info("💡 Tip: Use this dashboard to manage your AI content agency across multiple pages and niches.")
+st.sidebar.info("💡 Your autonomous AI content agency dashboard. Manage multiple pages, track performance, and trigger workflows.")
 
 # ============ DASHBOARD PAGE ============
 if page == "📊 Dashboard":
@@ -57,7 +56,7 @@ if page == "📊 Dashboard":
         st.markdown("---")
         
         # Pages overview
-        st.subheader("📱 Your Pages")
+        st.markdown(styles.create_section_header("Your Pages", "📱"), unsafe_allow_html=True)
         if pages:
             for p in pages:
                 st.markdown(
@@ -65,7 +64,8 @@ if page == "📊 Dashboard":
                         p['name'],
                         p.get('niche', 'No niche'),
                         p['status'],
-                        p['created_at'].strftime('%Y-%m-%d')
+                        p['created_at'].strftime('%Y-%m-%d'),
+                        p.get('description', '')
                     ),
                     unsafe_allow_html=True
                 )
@@ -81,24 +81,11 @@ if page == "📊 Dashboard":
                 with b3:
                     if st.button("🗑️ Delete", key=f"del_{p['id']}"):
                         st.session_state.deleting_page = p["id"]
-                    with col1:
-                        st.markdown(f"**{p['name']}**")
-                        st.caption(p.get('niche', 'No niche'))
-                    with col2:
-                        status_emoji = "✅" if p["status"] == "active" else "⏸️"
-                        st.markdown(f"{status_emoji} {p['status'].title()}")
-                    with col3:
-                        st.caption(f"Created: {p['created_at'].strftime('%Y-%m-%d')}")
-                    with col4:
-                        if st.button("Manage", key=f"manage_{p['id']}"):
-                            st.session_state.selected_page = p["id"]
-                            st.rerun()
-                    st.markdown("---")
         else:
             st.info("No pages yet. Go to **📱 Pages** to add your first page!")
         
         # Recent activity
-        st.subheader("📜 Recent Activity")
+        st.markdown(styles.create_section_header("Recent Activity", "📜"), unsafe_allow_html=True)
         if recent_runs:
             for run in recent_runs[:5]:
                 status_emoji = "✅" if run["status"] == "success" else "❌" if run["status"] == "failed" else "⏳"
@@ -121,27 +108,28 @@ elif page == "📱 Pages":
             pages = db.get_all_pages()
             if pages:
                 for p in pages:
-                    with st.expander(f"📱 {p['name']} ({p['niche']})", expanded=False):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**Status:** {p['status']}")
-                            st.markdown(f"**Created:** {p['created_at'].strftime('%Y-%m-%d')}")
-                        with col2:
-                            st.markdown(f"**Description:** {p.get('description', 'N/A')}")
-                        
-                        st.markdown("---")
-                        
-                        # Action buttons
-                        b1, b2, b3 = st.columns(3)
-                        with b1:
-                            if st.button("🚀 Run Now", key=f"run_{p['id']}"):
-                                st.info("Workflow trigger coming in Phase 3!")
-                        with b2:
-                            if st.button("✏️ Edit", key=f"edit_{p['id']}"):
-                                st.session_state.editing_page = p["id"]
-                        with b3:
-                            if st.button("🗑️ Delete", key=f"del_{p['id']}"):
-                                st.session_state.deleting_page = p["id"]
+                    st.markdown(
+                        styles.create_page_card(
+                            p['name'],
+                            p.get('niche', 'No niche'),
+                            p['status'],
+                            p['created_at'].strftime('%Y-%m-%d'),
+                            p.get('description', '')
+                        ),
+                        unsafe_allow_html=True
+                    )
+                    
+                    # Action buttons
+                    b1, b2, b3 = st.columns(3)
+                    with b1:
+                        if st.button("🚀 Run Now", key=f"run_all_{p['id']}"):
+                            st.info("Workflow trigger coming in Phase 3!")
+                    with b2:
+                        if st.button("✏️ Edit", key=f"edit_all_{p['id']}"):
+                            st.session_state.editing_page = p["id"]
+                    with b3:
+                        if st.button("🗑️ Delete", key=f"del_all_{p['id']}"):
+                            st.session_state.deleting_page = p["id"]
             else:
                 st.info("No pages yet. Add your first page in the **➕ Add New Page** tab!")
         except Exception as e:
@@ -186,7 +174,7 @@ elif page == "🔑 Tokens":
                 page_id = selected_page["id"]
                 
                 # Show existing tokens
-                st.subheader("📋 Connected Accounts")
+                st.markdown(styles.create_section_header("Connected Accounts", "📋"), unsafe_allow_html=True)
                 tokens = db.get_tokens(page_id)
                 if tokens:
                     for t in tokens:
@@ -199,7 +187,7 @@ elif page == "🔑 Tokens":
                 st.markdown("---")
                 
                 # Add new token
-                st.subheader("➕ Connect New Account")
+                st.markdown(styles.create_section_header("Connect New Account", "➕"), unsafe_allow_html=True)
                 with st.form("add_token_form"):
                     platform = st.selectbox("Platform", ["facebook", "instagram", "notion"])
                     access_token = st.text_input("Access Token *", type="password")
@@ -254,7 +242,7 @@ elif page == "📜 Run History":
 elif page == "⚙️ Settings":
     st.markdown('<p class="main-header">⚙️ Settings</p>', unsafe_allow_html=True)
     
-    st.subheader("🔌 Connection Status")
+    st.markdown(styles.create_section_header("Connection Status", "🔌"), unsafe_allow_html=True)
     
     # Check database
     try:
@@ -264,7 +252,7 @@ elif page == "⚙️ Settings":
         st.error(f"❌ Neon Database: {e}")
     
     # Check environment variables
-    st.subheader("🔐 Environment Variables")
+    st.markdown(styles.create_section_header("Environment Variables", "🔐"), unsafe_allow_html=True)
     env_vars = ["NOTION_API_KEY", "NOTION_DATABASE_ID", "MISTRAL_API_KEY", 
                 "FACEBOOK_PAGE_ID", "FACEBOOK_ACCESS_TOKEN", "INSTAGRAM_ACCOUNT_ID",
                 "STRATEGY_DB_ID", "MEMORY_DB_ID", "DATABASE_URL"]
