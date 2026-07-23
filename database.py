@@ -2,6 +2,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
+import requests
 
 # Get connection string from environment (Streamlit secrets or env var)
 DATABASE_URL = os.getenv("DATABASE_URL")
