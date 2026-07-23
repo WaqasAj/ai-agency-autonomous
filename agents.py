@@ -106,16 +106,20 @@ def notion_headers():
     }
 
 def generate_blog_image(title, keywords):
-    """Generate a 3D Pixar-style cartoon image using Pollinations.ai."""
-    # Optimized prompt for 3D Pixar cartoon style
-    prompt = f"3D Pixar style cartoon, {title[:80]}, cute characters, vibrant colors, Disney Pixar animation style, 3D rendered, professional quality, warm lighting, detailed textures, family-friendly"
+    """Generate a 3D Pixar-style cartoon image with a clean, short URL for Instagram."""
+    # 1. Strip ALL special characters and limit length to keep the URL very short
+    clean_title = re.sub(r'[^a-zA-Z0-9\s]', '', title)[:35]
     
-    # Clean up prompt
+    # 2. Create a simple, punchy prompt without complex punctuation
+    prompt = f"3D Pixar style cartoon, {clean_title}, cute, vibrant colors, family friendly"
+    
+    # 3. Clean up extra spaces
     prompt = ' '.join(prompt.split())
     encoded_prompt = requests.utils.quote(prompt)
     
-    # Use flux-3d model for 3D cartoon style
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=800&nologo=true&model=flux-3d&seed={hash(title) % 10000}"
+    # 4. Use standard 'flux' model (excellent at 3D) with minimal, clean parameters
+    # (Removed 'model=flux-3d' as it's not a standard endpoint, 'flux' handles 3D perfectly)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=800&nologo=true&seed={hash(title) % 10000}"
     
     print(f"🎨 Generated 3D Pixar-style cartoon image")
     return image_url
