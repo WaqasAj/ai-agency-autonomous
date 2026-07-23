@@ -1,90 +1,150 @@
+"""
+Kahani AI Agency Dashboard - Clean Professional Styles
+Modern, minimal design with excellent readability
+"""
+
 def load_css():
     """Load custom CSS styles for the Streamlit app."""
     return """
     <style>
-    /* ============ GLOBAL STYLES ============ */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    /* ============ GLOBAL ============ */
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #f8fafc;
+        font-family: 'Inter', sans-serif;
+    }
+    
+    .main .block-container {
+        padding: 2rem 3rem;
+        max-width: 1400px;
     }
     
     .main-header {
         font-size: 2.5rem;
         font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 1rem;
-        text-align: center;
+        color: #1e293b;
+        margin-bottom: 2rem;
+        letter-spacing: -0.5px;
+    }
+    
+    .sub-header {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #334155;
+        margin: 2rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e2e8f0;
     }
     
     /* ============ METRIC CARDS ============ */
     .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: white;
         padding: 1.5rem;
-        border-radius: 15px;
-        color: white;
+        border-radius: 12px;
         text-align: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        transition: transform 0.3s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border: 1px solid #e2e8f0;
+        transition: all 0.2s ease;
     }
     
     .metric-card:hover {
-        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    .metric-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
     }
     
     .metric-value {
         font-size: 2.5rem;
         font-weight: 700;
+        color: #3b82f6;
         margin: 0.5rem 0;
     }
     
     .metric-label {
-        font-size: 0.9rem;
-        opacity: 0.9;
+        font-size: 0.875rem;
+        color: #64748b;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
+        font-weight: 600;
     }
     
     /* ============ PAGE CARDS ============ */
     .page-card {
         background: white;
         padding: 1.5rem;
-        border-radius: 15px;
-        border-left: 5px solid #667eea;
+        border-radius: 12px;
+        border: 1px solid #e2e8f0;
         margin-bottom: 1rem;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        transition: all 0.2s ease;
     }
     
     .page-card:hover {
-        box-shadow: 0 10px 40px rgba(0,0,0,0.15);
-        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-color: #3b82f6;
+    }
+    
+    .page-card h3 {
+        margin: 0 0 0.5rem 0;
+        color: #1e293b;
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    
+    .page-card p {
+        margin: 0.25rem 0;
+        color: #64748b;
+        font-size: 0.95rem;
     }
     
     /* ============ BUTTONS ============ */
     .stButton>button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: #3b82f6;
+        color: white !important;
         border: none;
         padding: 0.5rem 1.5rem;
-        border-radius: 25px;
+        border-radius: 8px;
         font-weight: 600;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
     .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        background: #2563eb;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     }
     
     /* ============ SIDEBAR ============ */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+        background: #1e293b;
     }
     
     [data-testid="stSidebar"] .stMarkdown {
-        color: white;
+        color: #f1f5f9;
+    }
+    
+    [data-testid="stSidebar"] h1 {
+        color: #f1f5f9;
+        font-weight: 700;
+    }
+    
+    [data-testid="stSidebar"] .stRadio label {
+        color: #cbd5e1 !important;
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    
+    [data-testid="stSidebar"] .stRadio label:hover {
+        background: rgba(59, 130, 246, 0.1);
+        color: #f1f5f9 !important;
     }
     
     /* ============ TABS ============ */
@@ -95,83 +155,69 @@ def load_css():
     .stTabs [data-baseweb="tab"] {
         background: white;
         padding: 10px 20px;
-        border-radius: 10px 10px 0 0;
+        border-radius: 8px;
         font-weight: 600;
+        border: 1px solid #e2e8f0;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: #3b82f6;
+        color: white;
+        border-color: #3b82f6;
     }
     
     /* ============ STATUS BADGES ============ */
     .status-badge {
         display: inline-block;
-        padding: 0.3rem 0.8rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
+        padding: 0.375rem 0.875rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
     .status-active {
-        background: #10b981;
-        color: white;
+        background: #dcfce7;
+        color: #166534;
     }
     
     .status-paused {
-        background: #f59e0b;
-        color: white;
+        background: #fef3c7;
+        color: #92400e;
     }
     
     .status-inactive {
-        background: #ef4444;
-        color: white;
-    }
-    
-    /* ============ EXPANDERS ============ */
-    .streamlit-expanderHeader {
-        background: white;
-        border-radius: 10px;
-        padding: 1rem;
-        font-weight: 600;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        background: #fee2e2;
+        color: #991b1b;
     }
     
     /* ============ FORMS ============ */
     .stTextInput>div>div>input,
     .stTextArea>div>div>textarea {
-        border-radius: 10px;
-        border: 2px solid #e5e7eb;
-        transition: all 0.3s ease;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        transition: all 0.2s ease;
     }
     
     .stTextInput>div>div>input:focus,
     .stTextArea>div>div>textarea:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
     
     /* ============ ALERTS ============ */
     .stAlert {
-        border-radius: 10px;
-        border-left: 5px solid;
+        border-radius: 8px;
+        border-left: 4px solid;
     }
     
-    /* ============ ICONS ============ */
-    .icon-emoji {
-        font-size: 1.5rem;
-        margin-right: 0.5rem;
-    }
-    
-    /* ============ ANIMATIONS ============ */
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    .fade-in {
-        animation: fadeIn 0.5s ease-out;
+    /* ============ DIVIDERS ============ */
+    hr {
+        border: none;
+        height: 1px;
+        background: #e2e8f0;
+        margin: 2rem 0;
     }
     
     /* ============ RESPONSIVE ============ */
@@ -183,34 +229,51 @@ def load_css():
         .metric-value {
             font-size: 2rem;
         }
+        
+        .main .block-container {
+            padding: 1rem;
+        }
     }
     </style>
     """
 
 def create_metric_card(value, label, icon="📊"):
-    """Create a styled metric card."""
+    """Create a clean metric card."""
     return f"""
-    <div class="metric-card fade-in">
-        <div style="font-size: 2rem;">{icon}</div>
+    <div class="metric-card">
+        <div class="metric-icon">{icon}</div>
         <div class="metric-value">{value}</div>
         <div class="metric-label">{label}</div>
     </div>
     """
 
-def create_page_card(name, niche, status, created_date):
-    """Create a styled page card."""
-    status_class = "status-active" if status == "active" else "status-paused"
+def create_page_card(name, niche, status, created_date, description=""):
+    """Create a clean page card."""
+    status_class = "status-active" if status == "active" else "status-paused" if status == "paused" else "status-inactive"
+    
+    desc_html = f'<p style="margin: 0.25rem 0; color: #64748b; font-size: 0.9rem;">{description}</p>' if description else ""
+    
     return f"""
-    <div class="page-card fade-in">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h3 style="margin: 0; color: #1a1a2e;">{name}</h3>
-                <p style="margin: 0.3rem 0; color: #6b7280;">{niche}</p>
+    <div class="page-card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="flex: 1;">
+                <h3>{name}</h3>
+                <p style="margin: 0.25rem 0; color: #3b82f6; font-weight: 500;">{niche}</p>
+                {desc_html}
                 <span class="status-badge {status_class}">{status.upper()}</span>
             </div>
-            <div style="text-align: right; color: #9ca3af; font-size: 0.9rem;">
-                Created: {created_date}
+            <div style="text-align: right; color: #94a3b8; font-size: 0.875rem; margin-left: 2rem;">
+                <div style="margin-bottom: 0.25rem;">Created</div>
+                <div style="font-weight: 600; color: #475569;">{created_date}</div>
             </div>
         </div>
+    </div>
+    """
+
+def create_section_header(title, icon="📋"):
+    """Create a clean section header."""
+    return f"""
+    <div class="sub-header">
+        <span style="margin-right: 0.5rem;">{icon}</span>{title}
     </div>
     """
