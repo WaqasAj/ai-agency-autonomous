@@ -1,6 +1,7 @@
 import os
 import requests
 import re
+import time
 from crewai import Agent, Task, Crew, Process
 from datetime import datetime
 import litellm
@@ -28,6 +29,9 @@ litellm.completion = _patched_completion
 NOTION_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DB_ID = os.getenv("NOTION_DATABASE_ID")
 MISTRAL_KEY = os.getenv("MISTRAL_API_KEY")
+FB_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
+FB_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
+IG_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID")
 
 os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
 
@@ -71,40 +75,26 @@ DO THESE INSTEAD (human signals):
 
 # ============ CLEANING HELPERS ============
 def clean_title(title):
-    """Remove all surrounding quotes, asterisks, and whitespace from title."""
     if not title:
         return "Untitled"
-    # Strip *, ", ', whitespace from start and end (handles any combination)
     cleaned = re.sub(r'^[\s\*"\']+', '', title)
     cleaned = re.sub(r'[\s\*"\']+$', '', cleaned)
     return cleaned.strip()
 
 def clean_blog_content(content, title):
-    """Clean blog content: remove leading title repetition, markdown wrappers, etc."""
     if not content:
         return ""
-    
-    # Remove markdown code block wrappers (```markdown ... ```)
     content = re.sub(r'^```(?:markdown|md)?\s*', '', content)
     content = re.sub(r'\s*```$', '', content)
-    
-    # Remove leading title repetition (e.g., "# Title" at the start)
     clean_t = clean_title(title)
-    # Match leading heading that contains the title
     content = re.sub(r'^#+\s*' + re.escape(clean_t) + r'\s*\n+', '', content, flags=re.IGNORECASE)
-    
-    # Also remove if title appears with quotes/markdown around it
     content = re.sub(r'^#+\s*["\']?\*?' + re.escape(clean_t) + r'\*?["\']?\s*\n+', '', content, flags=re.IGNORECASE)
-    
-    # Remove any remaining leading # that's just a title-like heading (first line only)
     lines = content.split('\n')
     if lines and lines[0].startswith('# ') and len(lines[0]) < 100:
-        # Check if this first heading looks like the title (not actual content heading)
         first_heading = lines[0].replace('#', '').strip()
         if clean_t.lower() in first_heading.lower() or first_heading.lower() in clean_t.lower():
             lines = lines[1:]
             content = '\n'.join(lines)
-    
     return content.strip()
 
 # ============ NOTION API HELPERS ============
@@ -117,7 +107,6 @@ def notion_headers():
 
 def generate_blog_image(title, keywords):
     """Generate a high-quality AI image with proper anatomy using Pollinations.ai."""
-    # Quality-focused prompt with anatomy safeguards
     prompt = f"""Professional children's book illustration for a blog post titled: {title}. 
     Theme keywords: {keywords}.
     Style: Warm, whimsical, heartwarming digital illustration, Pixar-quality rendering.
@@ -128,7 +117,6 @@ def generate_blog_image(title, keywords):
     perfect facial features, correctly proportioned hands with five fingers each, 
     well-defined objects, no distortion, clear details."""
     
-    # Negative prompt to avoid deformations
     negative_prompt = """deformed, distorted, disfigured, poorly drawn, bad anatomy, 
     wrong anatomy, extra limbs, missing limbs, floating limbs, mutated hands, 
     extra fingers, missing fingers, fused fingers, malformed hands, bad hands, 
@@ -136,96 +124,42 @@ def generate_blog_image(title, keywords):
     asymmetrical face, cross-eyed, deformed eyes, mutation, mutilated, 
     grainy, low resolution, poorly drawn face, poorly drawn hands"""
     
-    # Clean up prompts (single line, no extra spaces)
     prompt = ' '.join(prompt.split())
     negative_prompt = ' '.join(negative_prompt.split())
     
-    # URL encode
     encoded_prompt = requests.utils.quote(prompt)
     encoded_negative = requests.utils.quote(negative_prompt)
     
-    # Use flux model (best for anatomy), large size, enhancement, negative prompt
     image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1536&height=1024&nologo=true&model=flux&enhance=true&negative_prompt={encoded_negative}&seed={hash(title) % 10000}"
     
     print(f"🎨 Generated high-quality blog image")
     return image_url
 
 def convert_text_to_notion_blocks(text):
-    """Convert plain text blog content to Notion blocks."""
     blocks = []
-    
-    # Split by paragraphs (double newlines)
     paragraphs = text.split('\n\n')
-    
     for para in paragraphs:
         para = para.strip()
         if not para:
             continue
-        
-        # Check if it's a heading (starts with #)
         if para.startswith('### '):
-            blocks.append({
-                "object": "block",
-                "type": "heading_3",
-                "heading_3": {
-                    "rich_text": [{"type": "text", "text": {"content": para.replace('### ', '')}}]
-                }
-            })
+            blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"type": "text", "text": {"content": para.replace('### ', '')}}]}})
         elif para.startswith('## '):
-            blocks.append({
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [{"type": "text", "text": {"content": para.replace('## ', '')}}]
-                }
-            })
+            blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": para.replace('## ', '')}}]}})
         elif para.startswith('# '):
-            blocks.append({
-                "object": "block",
-                "type": "heading_1",
-                "heading_1": {
-                    "rich_text": [{"type": "text", "text": {"content": para.replace('# ', '')}}]
-                }
-            })
-        # Check if it's a bullet point
+            blocks.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": [{"type": "text", "text": {"content": para.replace('# ', '')}}]}})
         elif para.startswith('- ') or para.startswith('* '):
-            blocks.append({
-                "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {
-                    "rich_text": [{"type": "text", "text": {"content": para[2:]}}]
-                }
-            })
-        # Check if it's a numbered list
+            blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"type": "text", "text": {"content": para[2:]}}]}})
         elif re.match(r'^\d+\. ', para):
-            blocks.append({
-                "object": "block",
-                "type": "numbered_list_item",
-                "numbered_list_item": {
-                    "rich_text": [{"type": "text", "text": {"content": re.sub(r'^\d+\. ', '', para)}}]
-                }
-            })
-        # Regular paragraph
+            blocks.append({"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": [{"type": "text", "text": {"content": re.sub(r'^\d+\. ', '', para)}}]}})
         else:
-            blocks.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": para}}]
-                }
-            })
-    
+            blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": para}}]}})
     return blocks
 
 def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url):
-    """Create a Notion page with properties (excerpt) and body (full content + image)."""
     url = "https://api.notion.com/v1/pages"
-    
-    # Clean title and content
     clean_t = clean_title(title)
     clean_content = clean_blog_content(full_blog_content, clean_t)
-    
-    # Extract excerpt (first 500 chars for the Content property)
     excerpt = clean_content[:500] if clean_content else ""
     
     payload = {
@@ -240,25 +174,12 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
             "Blog Source": {"select": {"name": "AI Generated"}}
         },
         "children": [
-            # Generated image at top
-            {
-                "object": "block",
-                "type": "image",
-                "image": {
-                    "type": "external",
-                    "external": {"url": image_url}
-                }
-            },
-            # Full blog content as Notion blocks
+            {"object": "block", "type": "image", "image": {"type": "external", "external": {"url": image_url}}},
             *convert_text_to_notion_blocks(clean_content)
         ]
     }
     
     print(f"\n📝 Creating Notion page...")
-    print(f"   Title: {clean_t}")
-    print(f"   Excerpt: {len(excerpt)} chars")
-    print(f"   Full content: {len(clean_content)} chars")
-    
     response = requests.post(url, headers=notion_headers(), json=payload)
     
     if response.status_code == 200:
@@ -266,12 +187,10 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
         print(f"✅ Created Notion page: {clean_t}")
         return page_id
     else:
-        print(f"❌ Failed to create page: {response.status_code}")
-        print(f"   Error: {response.text}")
+        print(f"❌ Failed to create page: {response.status_code} - {response.text}")
         return None
 
 def fetch_unprocessed_published_blogs():
-    """Fetch blogs that are published but not yet promoted on social media."""
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
     payload = {
         "filter": {
@@ -290,17 +209,14 @@ def fetch_unprocessed_published_blogs():
     blogs = []
     for result in data.get("results", []):
         title = result["properties"]["Title"]["title"][0]["text"]["content"] if result["properties"]["Title"]["title"] else "Untitled"
-        
         content = ""
         if "Content" in result["properties"] and result["properties"]["Content"]["type"] == "rich_text":
             if result["properties"]["Content"]["rich_text"]:
                 content = result["properties"]["Content"]["rich_text"][0]["text"]["content"]
-        
         meta = ""
         if "Meta Description" in result["properties"] and result["properties"]["Meta Description"]["type"] == "rich_text":
             if result["properties"]["Meta Description"]["rich_text"]:
                 meta = result["properties"]["Meta Description"]["rich_text"][0]["text"]["content"]
-        
         keywords = ""
         if "Keywords" in result["properties"] and result["properties"]["Keywords"]["type"] == "rich_text":
             if result["properties"]["Keywords"]["rich_text"]:
@@ -316,26 +232,20 @@ def fetch_unprocessed_published_blogs():
     return blogs
 
 def auto_publish_blog(page_id):
-    """Check the Published box to push blog live on website."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
     payload = {"properties": {"Published": {"checkbox": True}}}
-    
     print(f"🚀 Publishing blog to website...")
     response = requests.patch(url, headers=notion_headers(), json=payload)
-    
     if response.status_code == 200:
         print(f"✅ AUTO-PUBLISHED blog to website!")
         return True
     else:
-        print(f"❌ Failed to publish: {response.status_code}")
-        print(f"   Error: {response.text}")
+        print(f"❌ Failed to publish: {response.status_code} - {response.text}")
         return False
 
 def update_social_status(page_id, status):
-    """Update the Status column (type: status, not select)."""
     url = f"https://api.notion.com/v1/pages/{page_id}"
     payload = {"properties": {"Status": {"status": {"name": status}}}}
-    
     response = requests.patch(url, headers=notion_headers(), json=payload)
     if response.status_code == 200:
         print(f"✅ Updated Status to: {status}")
@@ -343,11 +253,9 @@ def update_social_status(page_id, status):
         print(f"⚠️ Failed to update Status: {response.status_code} - {response.text}")
 
 def log_to_notion(blog_title, agent_output):
-    """Create a log entry showing what the agents did."""
     url = "https://api.notion.com/v1/pages"
     truncated = str(agent_output)[:2000]
     clean_t = clean_title(blog_title)
-    
     payload = {
         "parent": {"database_id": NOTION_DB_ID},
         "properties": {
@@ -361,6 +269,139 @@ def log_to_notion(blog_title, agent_output):
         print(f"✅ Logged results to Notion for: {clean_t}")
     else:
         print(f"⚠️ Failed to log to Notion: {response.status_code}")
+
+# ============ FACEBOOK & INSTAGRAM POSTING ============
+def create_instagram_caption(title, content, keywords):
+    """Create an Instagram-optimized caption (max 2200 chars)."""
+    clean_t = clean_title(title)
+    # Extract first 2-3 paragraphs as caption base
+    paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()][:3]
+    intro = ' '.join(paragraphs)[:800]
+    
+    # Add hashtags
+    keyword_list = [k.strip().replace(' ', '') for k in keywords.split(',')[:8]]
+    hashtags = ' '.join([f'#{k}' for k in keyword_list])
+    
+    caption = f"""✨ {clean_t}
+
+{intro}
+
+💭 What's your experience with this? Drop a comment below! 👇
+
+📖 Read the full story on our blog (link in bio)
+
+{hashtags}
+
+#KahaniAI #BedtimeStories #ParentingTips #KidsStories"""
+    
+    # Ensure under 2200 chars
+    if len(caption) > 2200:
+        caption = caption[:2197] + "..."
+    
+    return caption
+
+def create_facebook_caption(title, content, keywords):
+    """Create a Facebook-optimized caption (can be longer)."""
+    clean_t = clean_title(title)
+    paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()][:5]
+    intro = '\n\n'.join(paragraphs)[:1500]
+    
+    caption = f"""📚 {clean_t}
+
+{intro}
+
+---
+💬 We'd love to hear from you! What's your experience with this topic? Share in the comments!
+
+👉 Read the full article on our blog and discover how Kahani AI can help your family create magical storytelling moments.
+
+#KahaniAI #BedtimeStories #Parenting #KidsStories #MultilingualEducation"""
+    
+    return caption
+
+def post_to_instagram(image_url, caption):
+    """Post to Instagram using the 2-step Graph API process."""
+    if not IG_ACCOUNT_ID or not FB_ACCESS_TOKEN:
+        print("❌ Instagram credentials missing. Skipping Instagram post.")
+        return None
+    
+    print(f"\n📸 Posting to Instagram...")
+    
+    # Step 1: Create media container
+    container_url = f"https://graph.facebook.com/v19.0/{IG_ACCOUNT_ID}/media"
+    container_payload = {
+        "image_url": image_url,
+        "caption": caption,
+        "access_token": FB_ACCESS_TOKEN
+    }
+    
+    response = requests.post(container_url, data=container_payload)
+    
+    if response.status_code != 200:
+        print(f"❌ Failed to create Instagram container: {response.status_code}")
+        print(f"   Error: {response.text}")
+        return None
+    
+    container_id = response.json().get("id")
+    print(f"✅ Instagram container created: {container_id}")
+    
+    # Wait a few seconds for Instagram to process the image
+    time.sleep(5)
+    
+    # Step 2: Check container status
+    status_url = f"https://graph.facebook.com/v19.0/{container_id}"
+    status_params = {"fields": "status_code", "access_token": FB_ACCESS_TOKEN}
+    status_response = requests.get(status_url, params=status_params)
+    
+    if status_response.status_code == 200:
+        status = status_response.json().get("status_code")
+        if status != "FINISHED":
+            print(f"⚠️ Container status: {status}. Waiting longer...")
+            time.sleep(10)
+    
+    # Step 3: Publish the container
+    publish_url = f"https://graph.facebook.com/v19.0/{IG_ACCOUNT_ID}/media_publish"
+    publish_payload = {
+        "creation_id": container_id,
+        "access_token": FB_ACCESS_TOKEN
+    }
+    
+    response = requests.post(publish_url, data=publish_payload)
+    
+    if response.status_code == 200:
+        media_id = response.json().get("id")
+        print(f"✅ Posted to Instagram! Media ID: {media_id}")
+        return media_id
+    else:
+        print(f"❌ Failed to publish to Instagram: {response.status_code}")
+        print(f"   Error: {response.text}")
+        return None
+
+def post_to_facebook(image_url, caption):
+    """Post to Facebook Page with image."""
+    if not FB_PAGE_ID or not FB_ACCESS_TOKEN:
+        print("❌ Facebook credentials missing. Skipping Facebook post.")
+        return None
+    
+    print(f"\n📘 Posting to Facebook...")
+    
+    post_url = f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/feed"
+    post_payload = {
+        "message": caption,
+        "link": image_url,  # Attach the image
+        "access_token": FB_ACCESS_TOKEN
+    }
+    
+    response = requests.post(post_url, data=post_payload)
+    
+    if response.status_code == 200:
+        post_id = response.json().get("id")
+        print(f"✅ Posted to Facebook! Post ID: {post_id}")
+        return post_id
+    else:
+        print(f"❌ Failed to post to Facebook: {response.status_code}")
+        print(f"   Error: {response.text}")
+        return None
 
 # ============ DEFINE THE 7 AUTONOMOUS AGENTS ============
 
@@ -478,7 +519,6 @@ def run_blog_creation_phase():
     print("📝 PHASE 1: BLOG CREATION (with CEO feedback loop)")
     print("="*60)
     
-    # STEP 1: Research topic
     research_task = Task(
         description=f"""Research ONE trending blog topic perfect for Kahani AI's audience.
         Consider: bedtime routines, multilingual education, screen-free activities, 
@@ -499,7 +539,6 @@ def run_blog_creation_phase():
     title = clean_title(research_task.output.raw.strip()) if research_task.output else "Untitled"
     print(f"\n🎯 Topic selected: {title}")
     
-    # STEP 2: Write → SEO → Review (up to 2 attempts)
     MAX_REVISIONS = 2
     ceo_feedback = None
     final_blog_content = None
@@ -612,7 +651,6 @@ Use ## for section headings (not #)."""
             else:
                 print(f"⚠️ Max revisions reached. Using last version.")
     
-    # Parse SEO/GEO data
     slug = ""
     meta = ""
     keywords = ""
@@ -634,10 +672,8 @@ Use ## for section headings (not #)."""
     print(f"🔑 Keywords: {keywords}")
     
     if is_approved and title and final_blog_content:
-        # Generate high-quality image
         image_url = generate_blog_image(title, keywords)
         
-        # Create Notion page with properties + body content
         page_id = create_notion_page_with_body(
             title, 
             final_blog_content[:500],
@@ -650,7 +686,14 @@ Use ## for section headings (not #)."""
         
         if page_id:
             auto_publish_blog(page_id)
-            return {"title": title, "page_id": page_id, "status": "published"}
+            return {
+                "title": title, 
+                "page_id": page_id, 
+                "status": "published",
+                "content": final_blog_content,
+                "keywords": keywords,
+                "image_url": image_url
+            }
     
     return {"title": title, "status": "rejected", "feedback": final_ceo_decision}
 
@@ -707,10 +750,49 @@ Content preview: {blog['content'][:1500]}
         
         result = crew.kickoff()
         
-        log_to_notion(blog['title'], result)
+        # ===== ACTUAL POSTING TO FACEBOOK & INSTAGRAM =====
+        # Generate image for the post
+        image_url = generate_blog_image(blog['title'], blog['keywords'])
+        
+        # Create platform-specific captions
+        ig_caption = create_instagram_caption(blog['title'], blog['content'], blog['keywords'])
+        fb_caption = create_facebook_caption(blog['title'], blog['content'], blog['keywords'])
+        
+        # Post to Instagram
+        print("\n" + "="*40)
+        print("📸 INSTAGRAM POST")
+        print("="*40)
+        ig_result = post_to_instagram(image_url, ig_caption)
+        
+        # Post to Facebook
+        print("\n" + "="*40)
+        print("📘 FACEBOOK POST")
+        print("="*40)
+        fb_result = post_to_facebook(image_url, fb_caption)
+        
+        # Log results to Notion
+        log_data = f"""
+📱 SOCIAL MEDIA POST RESULTS
+============================
+Blog: {blog['title']}
+
+📸 Instagram:
+- Status: {'✅ Posted' if ig_result else '❌ Failed'}
+- Media ID: {ig_result if ig_result else 'N/A'}
+- Caption preview: {ig_caption[:200]}...
+
+📘 Facebook:
+- Status: {'✅ Posted' if fb_result else '❌ Failed'}
+- Post ID: {fb_result if fb_result else 'N/A'}
+- Caption preview: {fb_caption[:200]}...
+
+🤖 Agent Strategy:
+{str(result)[:1000]}
+"""
+        log_to_notion(blog['title'], log_data)
         update_social_status(blog['id'], "Posted")
         
-        print(f"✅ Completed promotion for: {blog['title']}")
+        print(f"\n✅ Completed promotion for: {blog['title']}")
 
 # ============ MAIN EXECUTION ============
 def run_daily_agency():
