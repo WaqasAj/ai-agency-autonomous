@@ -106,42 +106,19 @@ def notion_headers():
     }
 
 def generate_blog_image(title, keywords):
-    """Generate a high-quality AI image with a shorter URL."""
-    # Shorter prompt (under 150 chars) to keep URL length manageable
-    prompt = f"Children's book illustration, {title[:80]}, warm colors, magical bedtime scene, Pixar style, high quality"
+    """Generate a high-quality AI image using Pollinations.ai with Flux model."""
+    # Optimized prompt for children's book style
+    prompt = f"Children's book illustration, {title[:80]}, warm magical colors, cozy bedtime atmosphere, whimsical style, professional quality, detailed"
     
-    # Clean up prompt (single line, no extra spaces)
+    # Clean up prompt
     prompt = ' '.join(prompt.split())
-    
-    # URL encode
     encoded_prompt = requests.utils.quote(prompt)
     
-    # Shorter URL without negative_prompt parameter
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=800&nologo=true&seed={hash(title) % 10000}"
+    # Use flux-realism model for better quality
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=800&nologo=true&model=flux-realism&seed={hash(title) % 10000}"
     
-    print(f"🎨 Generated blog image")
+    print(f"🎨 Generated high-quality blog image")
     return image_url
-def convert_text_to_notion_blocks(text):
-    blocks = []
-    paragraphs = text.split('\n\n')
-    for para in paragraphs:
-        para = para.strip()
-        if not para:
-            continue
-        if para.startswith('### '):
-            blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"type": "text", "text": {"content": para.replace('### ', '')}}]}})
-        elif para.startswith('## '):
-            blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": para.replace('## ', '')}}]}})
-        elif para.startswith('# '):
-            blocks.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": [{"type": "text", "text": {"content": para.replace('# ', '')}}]}})
-        elif para.startswith('- ') or para.startswith('* '):
-            blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"type": "text", "text": {"content": para[2:]}}]}})
-        elif re.match(r'^\d+\. ', para):
-            blocks.append({"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": [{"type": "text", "text": {"content": re.sub(r'^\d+\. ', '', para)}}]}})
-        else:
-            blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": para}}]}})
-    return blocks
-
 def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url):
     url = "https://api.notion.com/v1/pages"
     clean_t = clean_title(title)
@@ -364,11 +341,31 @@ def post_to_instagram(image_url, caption):
         return None
 
 def post_to_facebook(image_url, caption):
-    """Post to Facebook Page with image."""
+    """Post to Facebook Page with image (no link preview)."""
     if not FB_PAGE_ID or not FB_ACCESS_TOKEN:
         print("❌ Facebook credentials missing. Skipping Facebook post.")
         return None
     
+    print(f"\n📘 Posting to Facebook...")
+    
+    # Use /photos endpoint to upload image directly (not as a link)
+    post_url = f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/photos"
+    post_payload = {
+        "message": caption,
+        "url": image_url,  # Direct image upload
+        "access_token": FB_ACCESS_TOKEN
+    }
+    
+    response = requests.post(post_url, data=post_payload)
+    
+    if response.status_code == 200:
+        post_id = response.json().get("id")
+        print(f"✅ Posted to Facebook! Photo ID: {post_id}")
+        return post_id
+    else:
+        print(f"❌ Failed to post to Facebook: {response.status_code}")
+        print(f"   Error: {response.text}")
+        return None    
     print(f"\n📘 Posting to Facebook...")
     
     post_url = f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/feed"
