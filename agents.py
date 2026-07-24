@@ -734,33 +734,27 @@ poster = Agent(
 # ============ PHASE 1: BLOG CREATION WITH FEEDBACK LOOP ============
 def run_blog_creation_phase():
     print("\n" + "="*60)
-    print("📝 PHASE 1: BLOG CREATION (with CEO feedback loop)")
+    print("PHASE 1: BLOG CREATION (with CEO feedback loop)")
     print("="*60)
     
     # Fetch strategy and memories
     strategy = fetch_active_strategy()
     if strategy:
-        print(f"\n🎯 Active Strategy: {strategy['goal']}")
-        print(f"👥 Target Audience: {strategy['target_audience']}")
-        print(f"📊 Priority: {strategy['current_priority']}")
+        print(f"\nActive Strategy: {strategy['goal']}")
+        print(f"Target Audience: {strategy['target_audience']}")
+        print(f"Priority: {strategy['current_priority']}")
     
     # Fetch relevant memories for the writer
     failure_memories = fetch_relevant_memories(outcome="Failure", limit=5)
     success_memories = fetch_relevant_memories(outcome="Success", limit=5)
     
     if failure_memories:
-        print(f"\n⚠️ Loaded {len(failure_memories)} past failures to avoid")
+        print(f"\nLoaded {len(failure_memories)} past failures to avoid")
     if success_memories:
-        print(f"✅ Loaded {len(success_memories)} past successes to follow")
+        print(f"Loaded {len(success_memories)} past successes to follow")
     
     research_task = Task(
-        description=f"""Research ONE trending blog topic perfect for Kahani AI's audience.
-        Consider: bedtime routines, multilingual education, screen-free activities, 
-        cultural stories, child development, Islamic stories for kids.
-        
-        {f"STRATEGY GUIDANCE: Focus on {strategy['current_priority']} priority. Target: {strategy['target_audience']}. Content pillars: {', '.join(strategy['content_pillars'])}." if strategy else ""}
-        
-        Output ONLY the blog topic/title as plain text, no quotes, no markdown, nothing else.""",
+        description="Research ONE trending blog topic perfect for Kahani AI's audience. Consider: bedtime routines, multilingual education, screen-free activities, cultural stories, child development, Islamic stories for kids. Output ONLY the blog topic/title as plain text, no quotes, no markdown, nothing else.",
         expected_output="A single compelling blog topic/title as plain text",
         agent=trend_researcher
     )
@@ -774,18 +768,23 @@ def run_blog_creation_phase():
     
     research_crew.kickoff()
     title = clean_title(research_task.output.raw.strip()) if research_task.output else "Untitled"
-    print(f"\n🎯 Topic selected: {title}")
+    print(f"\nTopic selected: {title}")
     
     MAX_REVISIONS = 2
     ceo_feedback = None
     final_blog_content = None
     final_seo_output = None
     final_ceo_decision = None
+    recent_titles = []
     
     for attempt in range(1, MAX_REVISIONS + 1):
         print(f"\n{'='*40}")
-        print(f"📝 ATTEMPT {attempt}/{MAX_REVISIONS}")
+        print(f"ATTEMPT {attempt}/{MAX_REVISIONS}")
         print(f"{'='*40}")
+        
+        # Fetch recent titles for duplicate check
+        recent_titles = fetch_recent_blog_titles(days=30, limit=15)
+        recent_titles_text = "\n".join([f"- {t}" for t in recent_titles]) if recent_titles else "No recent posts"
         
         # Build memory context for writer
         memory_context = ""
@@ -800,37 +799,29 @@ def run_blog_creation_phase():
                 memory_context += f"- {mem['summary']}: {mem['content'][:100]}\n"
         
         if ceo_feedback:
-            write_description = f"""REVISE the blog post based on CEO feedback.
-            
-PREVIOUS CEO FEEDBACK:
-{ceo_feedback}
-
-🚨 IMPORTANT: If the CEO rejected for DUPLICATE CONTENT, you MUST pick a COMPLETELY DIFFERENT 
-topic within the same niche. Do NOT just rewrite the same topic. Choose a fresh angle that 
-doesn't overlap with these recent posts:
-{recent_titles_text}
-
-Fix ALL the issues mentioned. Apply every specific change requested.
-Maintain the same niche focus but with a unique angle.
-
-{HUMANIZATION_RULES}
-{memory_context}
-
-Output ONLY the revised blog post (800-1200 words). Do NOT repeat the title at the top. 
-Start directly with the introduction paragraph. Use ## for section headings."""
+            write_description = (
+                "REVISE the blog post based on CEO feedback.\n\n"
+                f"PREVIOUS CEO FEEDBACK:\n{ceo_feedback}\n\n"
+                f"IMPORTANT: If the CEO rejected for DUPLICATE CONTENT, you MUST pick a COMPLETELY DIFFERENT "
+                f"topic within the same niche. Do NOT just rewrite the same topic. Choose a fresh angle that "
+                f"doesn't overlap with these recent posts:\n{recent_titles_text}\n\n"
+                "Fix ALL the issues mentioned. Apply every specific change requested.\n"
+                "Maintain the same niche focus but with a unique angle.\n\n"
+                f"{HUMANIZATION_RULES}\n{memory_context}\n\n"
+                "Output ONLY the revised blog post (800-1200 words). Do NOT repeat the title at the top. "
+                "Start directly with the introduction paragraph. Use ## for section headings."
+            )
         else:
-            write_description = f"""Write a complete, engaging blog post (800-1200 words) on this topic: {title}
-
-{HUMANIZATION_RULES}
-{memory_context}
-
-Make it warm, practical, and parent-friendly. Naturally mention how Kahani AI can help.
-CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use ## for section headings, 
-bullet points, and provide direct, factual answers to common parent questions about the topic. 
-Avoid fluff; maximize information density.
-
-IMPORTANT: Do NOT repeat the title at the top. Start directly with the introduction paragraph.
-Use ## for section headings (not #)."""
+            write_description = (
+                f"Write a complete, engaging blog post (800-1200 words) on this topic: {title}\n\n"
+                f"{HUMANIZATION_RULES}\n{memory_context}\n\n"
+                "Make it warm, practical, and parent-friendly. Naturally mention how Kahani AI can help.\n"
+                "CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use ## for section headings, "
+                "bullet points, and provide direct, factual answers to common parent questions about the topic. "
+                "Avoid fluff; maximize information density.\n\n"
+                "IMPORTANT: Do NOT repeat the title at the top. Start directly with the introduction paragraph. "
+                "Use ## for section headings (not #)."
+            )
         
         write_task = Task(
             description=write_description,
@@ -839,16 +830,18 @@ Use ## for section headings (not #)."""
         )
         
         seo_geo_task = Task(
-            description="""Create SEO and GEO elements for this blog:
-        1. URL slug (lowercase, hyphens, max 60 chars)
-        2. Meta description (under 160 chars, compelling)
-        3. 5-8 target keywords (comma-separated)
-        4. GEO Direct Answer Snippets: Provide 2-3 concise, factual, standalone sentences that directly answer the core question of the blog.
-        Output in this exact format:
-        SLUG: [slug]
-        META: [meta description]
-        KEYWORDS: [keyword1, keyword2, ...]
-        GEO_SNIPPETS: [snippet 1] | [snippet 2]""",
+            description=(
+                "Create SEO and GEO elements for this blog:\n"
+                "1. URL slug (lowercase, hyphens, max 60 chars)\n"
+                "2. Meta description (under 160 chars, compelling)\n"
+                "3. 5-8 target keywords (comma-separated)\n"
+                "4. GEO Direct Answer Snippets: Provide 2-3 concise, factual, standalone sentences that directly answer the core question of the blog.\n"
+                "Output in this exact format:\n"
+                "SLUG: [slug]\n"
+                "META: [meta description]\n"
+                "KEYWORDS: [keyword1, keyword2, ...]\n"
+                "GEO_SNIPPETS: [snippet 1] | [snippet 2]"
+            ),
             expected_output="Slug, meta description, keywords, and GEO snippets in specified format",
             agent=seo_geo_optimizer
         )
@@ -856,54 +849,39 @@ Use ## for section headings (not #)."""
         # Build strategy context for CEO
         strategy_context = ""
         if strategy:
-            strategy_context = f"""
-FOUNDER'S STRATEGY (you MUST enforce this):
-- Goal: {strategy['goal']}
-- Target Audience: {strategy['target_audience']}
-- Current Priority: {strategy['current_priority']}
-- Brand Rules: {strategy['brand_rules']}
-"""
+            strategy_context = (
+                "\nFOUNDER'S STRATEGY (you MUST enforce this):\n"
+                f"- Goal: {strategy['goal']}\n"
+                f"- Target Audience: {strategy['target_audience']}\n"
+                f"- Current Priority: {strategy['current_priority']}\n"
+                f"- Brand Rules: {strategy['brand_rules']}\n"
+            )
         
-        # Fetch recent titles for duplicate check
-        recent_titles = fetch_recent_blog_titles(days=30, limit=15)
-        recent_titles_text = "\n".join([f"- {t}" for t in recent_titles]) if recent_titles else "No recent posts"
-        
-        review_task = Task(
-            description=f"""Review the blog post rigorously against ALL criteria:
-        - HUMANIZATION (most important): Does it sound like a real parent? Check for AI clichés.
-        - Child-safety and family-friendliness
-        - Cultural sensitivity (multilingual audience)
-        - Brand voice alignment (warm, trustworthy, real)
-        - Genuine value to parents
-        - GEO/SEO structure (clear headings, direct answers)
-        
-        🚨 DUPLICATE CONTENT CHECK (CRITICAL):
-        Compare this post's topic against recent posts:
-        {recent_titles_text}
-        
-        If the topic is TOO SIMILAR to any recent post (same core subject, same angle), 
-        you MUST REJECT it with this exact message:
-        "DECISION: REJECTED - DUPLICATE CONTENT: This topic overlaps with '[similar title]'. 
-        Choose a completely different angle or subtopic within the niche."
-        
-        {strategy_context}
-        
-        Output in EXACT format:
-        DECISION: APPROVED or REJECTED
-        SCORE: X/10
-        REASONS: [bullet list]
-        FIXES_NEEDED: [bullet list - only if REJECTED]""",
-            expected_output="DECISION, SCORE, REASONS, and FIXES_NEEDED",
-            agent=ceo_reviewer
+        review_description = (
+            "Review the blog post rigorously against ALL criteria:\n"
+            "- HUMANIZATION (most important): Does it sound like a real parent? Check for AI cliches.\n"
+            "- Child-safety and family-friendliness\n"
+            "- Cultural sensitivity (multilingual audience)\n"
+            "- Brand voice alignment (warm, trustworthy, real)\n"
+            "- Genuine value to parents\n"
+            "- GEO/SEO structure (clear headings, direct answers)\n\n"
+            "DUPLICATE CONTENT CHECK (CRITICAL):\n"
+            "Compare this post's topic against recent posts:\n"
+            f"{recent_titles_text}\n\n"
+            "If the topic is TOO SIMILAR to any recent post (same core subject, same angle), "
+            "you MUST REJECT it with this exact message:\n"
+            "DECISION: REJECTED - DUPLICATE CONTENT: This topic overlaps with '[similar title]'. "
+            "Choose a completely different angle or subtopic within the niche.\n\n"
+            f"{strategy_context}\n"
+            "Output in EXACT format:\n"
+            "DECISION: APPROVED or REJECTED\n"
+            "SCORE: X/10\n"
+            "REASONS: [bullet list]\n"
+            "FIXES_NEEDED: [bullet list - only if REJECTED]"
         )
         
-        {strategy_context}
-        
-        Output in EXACT format:
-        DECISION: APPROVED or REJECTED
-        SCORE: X/10
-        REASONS: [bullet list]
-        FIXES_NEEDED: [bullet list - only if REJECTED]""",
+        review_task = Task(
+            description=review_description,
             expected_output="DECISION, SCORE, REASONS, and FIXES_NEEDED",
             agent=ceo_reviewer
         )
@@ -921,13 +899,13 @@ FOUNDER'S STRATEGY (you MUST enforce this):
         seo_output = seo_geo_task.output.raw.strip() if seo_geo_task.output else ""
         ceo_decision = review_task.output.raw.strip() if review_task.output else ""
         
-        print(f"\n📊 CEO Response (Attempt {attempt}):")
+        print(f"\nCEO Response (Attempt {attempt}):")
         print(ceo_decision[:500])
         
         is_approved = "DECISION: APPROVED" in ceo_decision.upper()
         
         if is_approved:
-            print(f"\n✅ CEO APPROVED on attempt {attempt}!")
+            print(f"\nCEO APPROVED on attempt {attempt}!")
             final_blog_content = blog_content
             final_seo_output = seo_output
             final_ceo_decision = ceo_decision
@@ -943,7 +921,7 @@ FOUNDER'S STRATEGY (you MUST enforce this):
             )
             break
         else:
-            print(f"\n❌ CEO REJECTED on attempt {attempt}. Extracting feedback...")
+            print(f"\nCEO REJECTED on attempt {attempt}. Extracting feedback...")
             ceo_feedback = ceo_decision
             final_blog_content = blog_content
             final_seo_output = seo_output
@@ -960,9 +938,9 @@ FOUNDER'S STRATEGY (you MUST enforce this):
             )
             
             if attempt < MAX_REVISIONS:
-                print(f"🔄 Sending feedback to writer for revision...")
+                print(f"Sending feedback to writer for revision...")
             else:
-                print(f"⚠️ Max revisions reached. Using last version.")
+                print(f"Max revisions reached. Using last version.")
     
     slug = ""
     meta = ""
@@ -978,11 +956,11 @@ FOUNDER'S STRATEGY (you MUST enforce this):
     
     is_approved = "DECISION: APPROVED" in final_ceo_decision.upper()
     
-    print(f"\n📊 Final CEO Decision: {'✅ APPROVED' if is_approved else '❌ REJECTED'}")
-    print(f"📝 Title: {title}")
-    print(f"🔗 Slug: {slug}")
-    print(f"📄 Meta: {meta}")
-    print(f"🔑 Keywords: {keywords}")
+    print(f"\nFinal CEO Decision: {'APPROVED' if is_approved else 'REJECTED'}")
+    print(f"Title: {title}")
+    print(f"Slug: {slug}")
+    print(f"Meta: {meta}")
+    print(f"Keywords: {keywords}")
     
     if is_approved and title and final_blog_content:
         image_url = generate_blog_image(title, keywords)
@@ -998,8 +976,8 @@ FOUNDER'S STRATEGY (you MUST enforce this):
         )
         
         if page_id:
-            #auto_publish_blog(page_id)
-            print(f"⏸️ Blog saved as DRAFT (auto-publish disabled)")
+            # Skip auto-publish while site is suspended
+            print(f"Blog saved as DRAFT (auto-publish disabled)")
             return {
                 "title": title, 
                 "page_id": page_id, 
@@ -1010,7 +988,6 @@ FOUNDER'S STRATEGY (you MUST enforce this):
             }
     
     return {"title": title, "status": "rejected", "feedback": final_ceo_decision}
-
 # ============ PHASE 2: SOCIAL MEDIA PROMOTION ============
 def run_social_promotion_phase():
     print("\n" + "="*60)
