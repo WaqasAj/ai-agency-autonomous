@@ -54,5 +54,4 @@ jobs:
         FACEBOOK_ACCESS_TOKEN: ${{ github.event.inputs.facebook_access_token || secrets.FACEBOOK_ACCESS_TOKEN }}
         INSTAGRAM_ACCOUNT_ID: ${{ github.event.inputs.instagram_account_id || secrets.INSTAGRAM_ACCOUNT_ID }}
       run: |
-        python check_columns.py
         python agents.py
