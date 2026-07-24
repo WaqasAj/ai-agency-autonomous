@@ -71,14 +71,38 @@ if page == "📊 Dashboard":
                 )
                 
                 # Action buttons
-                b1, b2, b3 = st.columns(3)
+                b1, b2, b3, b4 = st.columns(4)
                 with b1:
-                    if st.button("🚀 Run Now", key=f"run_{p['id']}"):
-                        st.info("Workflow trigger coming in Phase 3!")
+                    if st.button("🚀 Run Now", key=f"run_{p['id']}", type="primary"):
+                        with st.spinner("Triggering workflow..."):
+                            github_token = os.getenv("WORKFLOW_TRIGGER_TOKEN")
+                            
+                            if not github_token:
+                                st.error("❌ WORKFLOW_TRIGGER_TOKEN not set in Streamlit secrets!")
+                            else:
+                                result = db.trigger_github_workflow(
+                                    page_id=p['id'],
+                                    github_token=github_token,
+                                    repo_owner="YOUR_GITHUB_USERNAME",  # Replace with your GitHub username
+                                    repo_name="YOUR_REPO_NAME"  # Replace with your repo name
+                                )
+                                
+                                if result["success"]:
+                                    st.success(f"✅ Workflow triggered! Run ID: {result['run_id']}")
+                                    st.info("Check GitHub Actions for progress. This takes 5-10 minutes.")
+                                else:
+                                    st.error(f"❌ Failed to trigger: {result['error']}")
+                
                 with b2:
+                    if st.button("📜 View Logs", key=f"logs_{p['id']}"):
+                        st.session_state.viewing_logs = p["id"]
+                        st.rerun()
+                
+                with b3:
                     if st.button("✏️ Edit", key=f"edit_{p['id']}"):
                         st.session_state.editing_page = p["id"]
-                with b3:
+                
+                with b4:
                     if st.button("🗑️ Delete", key=f"del_{p['id']}"):
                         st.session_state.deleting_page = p["id"]
         else:
@@ -120,14 +144,38 @@ elif page == "📱 Pages":
                     )
                     
                     # Action buttons
-                    b1, b2, b3 = st.columns(3)
+                    b1, b2, b3, b4 = st.columns(4)
                     with b1:
-                        if st.button("🚀 Run Now", key=f"run_all_{p['id']}"):
-                            st.info("Workflow trigger coming in Phase 3!")
+                        if st.button("🚀 Run Now", key=f"run_all_{p['id']}", type="primary"):
+                            with st.spinner("Triggering workflow..."):
+                                github_token = os.getenv("WORKFLOW_TRIGGER_TOKEN")
+                                
+                                if not github_token:
+                                    st.error("❌ WORKFLOW_TRIGGER_TOKEN not set in Streamlit secrets!")
+                                else:
+                                    result = db.trigger_github_workflow(
+                                        page_id=p['id'],
+                                        github_token=github_token,
+                                        repo_owner="YOUR_GITHUB_USERNAME",  # Replace with your GitHub username
+                                        repo_name="YOUR_REPO_NAME"  # Replace with your repo name
+                                    )
+                                    
+                                    if result["success"]:
+                                        st.success(f"✅ Workflow triggered! Run ID: {result['run_id']}")
+                                        st.info("Check GitHub Actions for progress. This takes 5-10 minutes.")
+                                    else:
+                                        st.error(f"❌ Failed to trigger: {result['error']}")
+                    
                     with b2:
+                        if st.button("📜 View Logs", key=f"logs_all_{p['id']}"):
+                            st.session_state.viewing_logs = p["id"]
+                            st.rerun()
+                    
+                    with b3:
                         if st.button("✏️ Edit", key=f"edit_all_{p['id']}"):
                             st.session_state.editing_page = p["id"]
-                    with b3:
+                    
+                    with b4:
                         if st.button("🗑️ Delete", key=f"del_all_{p['id']}"):
                             st.session_state.deleting_page = p["id"]
             else:
@@ -154,7 +202,6 @@ elif page == "📱 Pages":
                     except Exception as e:
                         st.error(f"Error creating page: {e}")
 
-# ============ TOKENS MANAGEMENT ============
 # ============ TOKENS MANAGEMENT ============
 elif page == "🔑 Tokens":
     st.markdown('<p class="main-header">🔑 Access Tokens</p>', unsafe_allow_html=True)
@@ -282,6 +329,7 @@ elif page == "🔑 Tokens":
                                     st.info("Please check your token and ID, then try again.")
     except Exception as e:
         st.error(f"Error: {e}")
+
 # ============ RUN HISTORY ============
 elif page == "📜 Run History":
     st.markdown('<p class="main-header">📜 Run History</p>', unsafe_allow_html=True)
@@ -329,7 +377,7 @@ elif page == "⚙️ Settings":
     st.markdown(styles.create_section_header("Environment Variables", "🔐"), unsafe_allow_html=True)
     env_vars = ["NOTION_API_KEY", "NOTION_DATABASE_ID", "MISTRAL_API_KEY", 
                 "FACEBOOK_PAGE_ID", "FACEBOOK_ACCESS_TOKEN", "INSTAGRAM_ACCOUNT_ID",
-                "STRATEGY_DB_ID", "MEMORY_DB_ID", "DATABASE_URL"]
+                "STRATEGY_DB_ID", "MEMORY_DB_ID", "DATABASE_URL", "WORKFLOW_TRIGGER_TOKEN"]
     
     for var in env_vars:
         value = os.getenv(var)
@@ -340,4 +388,4 @@ elif page == "⚙️ Settings":
             st.warning(f"⚠️ {var}: Not set")
     
     st.markdown("---")
-    st.info("💡 This dashboard is in Phase 1. Phase 2 will add Facebook OAuth auto-connect. Phase 3 will add workflow triggering.")
+    st.info("💡 Phase 3 complete! You can now trigger workflows directly from this dashboard.")
