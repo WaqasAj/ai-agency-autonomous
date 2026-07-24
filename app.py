@@ -75,21 +75,21 @@ if page == "📊 Dashboard":
                 with b1:
                     if st.button("🚀 Run Now", key=f"run_{p['id']}", type="primary"):
                         with st.spinner("Triggering workflow..."):
-                            github_token = os.getenv("WORKFLOW_TRIGGER_TOKEN")
+                            _token = os.getenv("WORKFLOW_TRIGGER_TOKEN")
                             
-                            if not github_token:
+                            if not _token:
                                 st.error("❌ WORKFLOW_TRIGGER_TOKEN not set in Streamlit secrets!")
                             else:
-                                result = db.trigger_github_workflow(
+                                result = db.trigger__workflow(
                                     page_id=p['id'],
-                                    github_token=github_token,
-                                    repo_owner="YOUR_GITHUB_USERNAME",  # Replace with your GitHub username
-                                    repo_name="YOUR_REPO_NAME"  # Replace with your repo name
+                                    _token=_token,
+                                    repo_owner="WaqasAj",  # Replace with your  username
+                                    repo_name="ai-agency-autonomous"  # Replace with your repo name
                                 )
                                 
                                 if result["success"]:
                                     st.success(f"✅ Workflow triggered! Run ID: {result['run_id']}")
-                                    st.info("Check GitHub Actions for progress. This takes 5-10 minutes.")
+                                    st.info("Check  Actions for progress. This takes 5-10 minutes.")
                                 else:
                                     st.error(f"❌ Failed to trigger: {result['error']}")
                 
@@ -148,21 +148,21 @@ elif page == "📱 Pages":
                     with b1:
                         if st.button("🚀 Run Now", key=f"run_all_{p['id']}", type="primary"):
                             with st.spinner("Triggering workflow..."):
-                                github_token = os.getenv("WORKFLOW_TRIGGER_TOKEN")
+                                _token = os.getenv("WORKFLOW_TRIGGER_TOKEN")
                                 
-                                if not github_token:
+                                if not _token:
                                     st.error("❌ WORKFLOW_TRIGGER_TOKEN not set in Streamlit secrets!")
                                 else:
-                                    result = db.trigger_github_workflow(
+                                    result = db.trigger__workflow(
                                         page_id=p['id'],
-                                        github_token=github_token,
-                                        repo_owner="YOUR_GITHUB_USERNAME",  # Replace with your GitHub username
-                                        repo_name="YOUR_REPO_NAME"  # Replace with your repo name
+                                        _token=_token,
+                                        repo_owner="WaqasAj",  # Replace with your  username
+                                        repo_name="ai-agency-autonomous"  # Replace with your repo name
                                     )
                                     
                                     if result["success"]:
                                         st.success(f"✅ Workflow triggered! Run ID: {result['run_id']}")
-                                        st.info("Check GitHub Actions for progress. This takes 5-10 minutes.")
+                                        st.info("Check  Actions for progress. This takes 5-10 minutes.")
                                     else:
                                         st.error(f"❌ Failed to trigger: {result['error']}")
                     
