@@ -1085,7 +1085,7 @@ Content preview: {blog['content'][:1500]}
         
         # Log results to Notion
         log_data = f"""
-📱 SOCIAL MEDIA POST RESULTS
+ 📱 SOCIAL MEDIA POST RESULTS
 ============================
 Blog: {blog['title']}
 
