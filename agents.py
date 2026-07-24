@@ -737,14 +737,13 @@ def run_blog_creation_phase():
     print("PHASE 1: BLOG CREATION (with CEO feedback loop)")
     print("="*60)
     
-    # Fetch strategy and memories
+    # Fetch strategy and memories ONCE (these don't change between attempts)
     strategy = fetch_active_strategy()
     if strategy:
         print(f"\nActive Strategy: {strategy['goal']}")
         print(f"Target Audience: {strategy['target_audience']}")
         print(f"Priority: {strategy['current_priority']}")
     
-    # Fetch relevant memories for the writer
     failure_memories = fetch_relevant_memories(outcome="Failure", limit=5)
     success_memories = fetch_relevant_memories(outcome="Success", limit=5)
     
@@ -753,40 +752,62 @@ def run_blog_creation_phase():
     if success_memories:
         print(f"Loaded {len(success_memories)} past successes to follow")
     
-    research_task = Task(
-        description="Research ONE trending blog topic perfect for Kahani AI's audience. Consider: bedtime routines, multilingual education, screen-free activities, cultural stories, child development, Islamic stories for kids. Output ONLY the blog topic/title as plain text, no quotes, no markdown, nothing else.",
-        expected_output="A single compelling blog topic/title as plain text",
-        agent=trend_researcher
-    )
-    
-    research_crew = Crew(
-        agents=[trend_researcher],
-        tasks=[research_task],
-        process=Process.sequential,
-        verbose=True
-    )
-    
-    research_crew.kickoff()
-    title = clean_title(research_task.output.raw.strip()) if research_task.output else "Untitled"
-    print(f"\nTopic selected: {title}")
-    
     MAX_REVISIONS = 2
     ceo_feedback = None
     final_blog_content = None
     final_seo_output = None
     final_ceo_decision = None
-    recent_titles = []
+    final_title = None
     
     for attempt in range(1, MAX_REVISIONS + 1):
         print(f"\n{'='*40}")
         print(f"ATTEMPT {attempt}/{MAX_REVISIONS}")
         print(f"{'='*40}")
         
-        # Fetch recent titles for duplicate check
+        # STEP 1: FRESH RESEARCH on every attempt (this is the fix!)
+        print(f"\n[Step 1] Researching fresh topic...")
+        
+        # Build research description with rejection context
+        if ceo_feedback:
+            research_description = (
+                "Research ONE trending blog topic perfect for Kahani AI's audience.\n\n"
+                "CRITICAL: The previous topic was REJECTED by the CEO. You MUST pick a "
+                "COMPLETELY DIFFERENT topic. Do NOT revisit the same subject.\n\n"
+                "Consider these niches: bedtime routines, multilingual education, "
+                "screen-free activities, cultural stories, child development, Islamic stories for kids.\n\n"
+                "Output ONLY the blog topic/title as plain text, no quotes, no markdown, nothing else."
+            )
+        else:
+            research_description = (
+                "Research ONE trending blog topic perfect for Kahani AI's audience. "
+                "Consider: bedtime routines, multilingual education, screen-free activities, "
+                "cultural stories, child development, Islamic stories for kids. "
+                "Output ONLY the blog topic/title as plain text, no quotes, no markdown, nothing else."
+            )
+        
+        research_task = Task(
+            description=research_description,
+            expected_output="A single compelling blog topic/title as plain text",
+            agent=trend_researcher
+        )
+        
+        research_crew = Crew(
+            agents=[trend_researcher],
+            tasks=[research_task],
+            process=Process.sequential,
+            verbose=True
+        )
+        
+        research_crew.kickoff()
+        title = clean_title(research_task.output.raw.strip()) if research_task.output else "Untitled"
+        final_title = title
+        print(f"\nTopic selected: {title}")
+        
+        # STEP 2: Fetch recent titles for duplicate check
         recent_titles = fetch_recent_blog_titles(days=30, limit=15)
         recent_titles_text = "\n".join([f"- {t}" for t in recent_titles]) if recent_titles else "No recent posts"
         
-        # Build memory context for writer
+        # STEP 3: Build memory context for writer
         memory_context = ""
         if failure_memories:
             memory_context += "\n\nAVOID THESE PAST FAILURES:\n"
@@ -798,36 +819,28 @@ def run_blog_creation_phase():
             for mem in success_memories[:3]:
                 memory_context += f"- {mem['summary']}: {mem['content'][:100]}\n"
         
-        if ceo_feedback:
-            write_description = (
-                "REVISE the blog post based on CEO feedback.\n\n"
-                f"PREVIOUS CEO FEEDBACK:\n{ceo_feedback}\n\n"
-                f"IMPORTANT: If the CEO rejected for DUPLICATE CONTENT, you MUST pick a COMPLETELY DIFFERENT "
-                f"topic within the same niche. Do NOT just rewrite the same topic. Choose a fresh angle that "
-                f"doesn't overlap with these recent posts:\n{recent_titles_text}\n\n"
-                "Fix ALL the issues mentioned. Apply every specific change requested.\n"
-                "Maintain the same niche focus but with a unique angle.\n\n"
-                f"{HUMANIZATION_RULES}\n{memory_context}\n\n"
-                "Output ONLY the revised blog post (800-1200 words). Do NOT repeat the title at the top. "
-                "Start directly with the introduction paragraph. Use ## for section headings."
-            )
-        else:
-            write_description = (
-                f"Write a complete, engaging blog post (800-1200 words) on this topic: {title}\n\n"
-                f"{HUMANIZATION_RULES}\n{memory_context}\n\n"
-                "Make it warm, practical, and parent-friendly. Naturally mention how Kahani AI can help.\n"
-                "CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use ## for section headings, "
-                "bullet points, and provide direct, factual answers to common parent questions about the topic. "
-                "Avoid fluff; maximize information density.\n\n"
-                "IMPORTANT: Do NOT repeat the title at the top. Start directly with the introduction paragraph. "
-                "Use ## for section headings (not #)."
-            )
+        # STEP 4: Writer writes on the FRESH topic
+        print(f"\n[Step 2] Writing blog post...")
+        
+        write_description = (
+            f"Write a complete, engaging blog post (800-1200 words) on this topic: {title}\n\n"
+            f"{HUMANIZATION_RULES}\n{memory_context}\n\n"
+            "Make it warm, practical, and parent-friendly. Naturally mention how Kahani AI can help.\n"
+            "CRITICAL GEO REQUIREMENT: Structure the content for AI search engines. Use ## for section headings, "
+            "bullet points, and provide direct, factual answers to common parent questions about the topic. "
+            "Avoid fluff; maximize information density.\n\n"
+            "IMPORTANT: Do NOT repeat the title at the top. Start directly with the introduction paragraph. "
+            "Use ## for section headings (not #)."
+        )
         
         write_task = Task(
             description=write_description,
             expected_output="A complete, human-sounding, GEO-optimized blog post (800-1200 words)",
             agent=blog_writer
         )
+        
+        # STEP 5: SEO/GEO optimization
+        print(f"\n[Step 3] Optimizing SEO/GEO...")
         
         seo_geo_task = Task(
             description=(
@@ -846,7 +859,9 @@ def run_blog_creation_phase():
             agent=seo_geo_optimizer
         )
         
-        # Build strategy context for CEO
+        # STEP 6: CEO review
+        print(f"\n[Step 4] CEO reviewing...")
+        
         strategy_context = ""
         if strategy:
             strategy_context = (
@@ -886,6 +901,7 @@ def run_blog_creation_phase():
             agent=ceo_reviewer
         )
         
+        # STEP 7: Run the crew
         crew = Crew(
             agents=[blog_writer, seo_geo_optimizer, ceo_reviewer],
             tasks=[write_task, seo_geo_task, review_task],
@@ -921,7 +937,7 @@ def run_blog_creation_phase():
             )
             break
         else:
-            print(f"\nCEO REJECTED on attempt {attempt}. Extracting feedback...")
+            print(f"\nCEO REJECTED on attempt {attempt}.")
             ceo_feedback = ceo_decision
             final_blog_content = blog_content
             final_seo_output = seo_output
@@ -938,35 +954,37 @@ def run_blog_creation_phase():
             )
             
             if attempt < MAX_REVISIONS:
-                print(f"Sending feedback to writer for revision...")
+                print(f"Will research a NEW topic for next attempt...")
             else:
                 print(f"Max revisions reached. Using last version.")
     
+    # Parse SEO output
     slug = ""
     meta = ""
     keywords = ""
     
-    for line in final_seo_output.split('\n'):
-        if line.startswith("SLUG:"):
-            slug = line.replace("SLUG:", "").strip()
-        elif line.startswith("META:"):
-            meta = line.replace("META:", "").strip()
-        elif line.startswith("KEYWORDS:"):
-            keywords = line.replace("KEYWORDS:", "").strip()
+    if final_seo_output:
+        for line in final_seo_output.split('\n'):
+            if line.startswith("SLUG:"):
+                slug = line.replace("SLUG:", "").strip()
+            elif line.startswith("META:"):
+                meta = line.replace("META:", "").strip()
+            elif line.startswith("KEYWORDS:"):
+                keywords = line.replace("KEYWORDS:", "").strip()
     
-    is_approved = "DECISION: APPROVED" in final_ceo_decision.upper()
+    is_approved = "DECISION: APPROVED" in final_ceo_decision.upper() if final_ceo_decision else False
     
     print(f"\nFinal CEO Decision: {'APPROVED' if is_approved else 'REJECTED'}")
-    print(f"Title: {title}")
+    print(f"Final Title: {final_title}")
     print(f"Slug: {slug}")
     print(f"Meta: {meta}")
     print(f"Keywords: {keywords}")
     
-    if is_approved and title and final_blog_content:
-        image_url = generate_blog_image(title, keywords)
+    if is_approved and final_title and final_blog_content:
+        image_url = generate_blog_image(final_title, keywords)
         
         page_id = create_notion_page_with_body(
-            title, 
+            final_title, 
             final_blog_content[:500],
             slug, 
             meta, 
@@ -976,10 +994,9 @@ def run_blog_creation_phase():
         )
         
         if page_id:
-            # Skip auto-publish while site is suspended
             print(f"Blog saved as DRAFT (auto-publish disabled)")
             return {
-                "title": title, 
+                "title": final_title, 
                 "page_id": page_id, 
                 "status": "published",
                 "content": final_blog_content,
@@ -987,7 +1004,7 @@ def run_blog_creation_phase():
                 "image_url": image_url
             }
     
-    return {"title": title, "status": "rejected", "feedback": final_ceo_decision}
+    return {"title": final_title, "status": "rejected", "feedback": final_ceo_decision}
 # ============ PHASE 2: SOCIAL MEDIA PROMOTION ============
 def run_social_promotion_phase():
     print("\n" + "="*60)
