@@ -3,6 +3,7 @@ import requests
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
+import json
 
 # Get connection string from environment (Streamlit secrets or env var)
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -105,12 +106,17 @@ def get_tokens(page_id):
 
 def log_run(page_id, run_type, status, details=None, error_message=None):
     """Log a workflow run."""
+    import json
+    
+    # Convert dict to JSON string for PostgreSQL
+    details_json = json.dumps(details) if details else None
+    
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO run_history (page_id, run_type, status, details, error_message)
                    VALUES (%s, %s, %s, %s, %s) RETURNING id""",
-                (page_id, run_type, status, details, error_message)
+                (page_id, run_type, status, details_json, error_message)
             )
             run_id = cur.fetchone()["id"]
             conn.commit()
