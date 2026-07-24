@@ -2,9 +2,26 @@ name: Daily Autonomous Agents
 
 on:
   schedule:
-    # Runs at 09:00 AM UTC every day (02:00 PM PST)
-    - cron: '0 9 * * *'
-  workflow_dispatch: # Allows manual trigger
+    - cron: '0 9 * * *'  # 9 AM UTC daily
+  workflow_dispatch:
+    inputs:
+      page_name:
+        description: 'Page Name'
+        required: false
+        default: 'Kahani AI'
+      page_niche:
+        description: 'Page Niche'
+        required: false
+        default: 'Parenting'
+      facebook_page_id:
+        description: 'Facebook Page ID'
+        required: false
+      facebook_access_token:
+        description: 'Facebook Access Token'
+        required: false
+      instagram_account_id:
+        description: 'Instagram Account ID'
+        required: false
 
 jobs:
   run-agents:
@@ -12,10 +29,10 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
     
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v4
       with:
         python-version: '3.11'
     
@@ -24,16 +41,18 @@ jobs:
         pip install -r requirements.txt
     
     - name: Run Autonomous Agents
-    
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
         NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
         MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-        FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
-        FACEBOOK_ACCESS_TOKEN: ${{ secrets.FACEBOOK_ACCESS_TOKEN }}
         STRATEGY_DB_ID: ${{ secrets.STRATEGY_DB_ID }}
         MEMORY_DB_ID: ${{ secrets.MEMORY_DB_ID }}
-        INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        # Use workflow inputs if provided, otherwise use secrets
+        FACEBOOK_PAGE_ID: ${{ github.event.inputs.facebook_page_id || secrets.FACEBOOK_PAGE_ID }}
+        FACEBOOK_ACCESS_TOKEN: ${{ github.event.inputs.facebook_access_token || secrets.FACEBOOK_ACCESS_TOKEN }}
+        INSTAGRAM_ACCOUNT_ID: ${{ github.event.inputs.instagram_account_id || secrets.INSTAGRAM_ACCOUNT_ID }}
       run: |
+        python check_columns.py
         python agents.py
