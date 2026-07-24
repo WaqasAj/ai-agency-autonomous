@@ -1,8 +1,8 @@
 import os
+import requests
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
-import requests
 
 # Get connection string from environment (Streamlit secrets or env var)
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -202,3 +202,60 @@ def get_page_with_tokens(page_id):
             
             page["tokens"] = tokens
             return page
+
+def trigger_github_workflow(page_id, github_token, repo_owner, repo_name, workflow_filename="daily-agents.yml"):
+    """Trigger a GitHub Actions workflow for a specific page."""
+    try:
+        # Get page data with tokens
+        page_data = get_page_with_tokens(page_id)
+        if not page_data:
+            return {"success": False, "error": "Page not found"}
+        
+        # Extract tokens
+        fb_token = next((t for t in page_data["tokens"] if t["platform"] == "facebook"), None)
+        ig_token = next((t for t in page_data["tokens"] if t["platform"] == "instagram"), None)
+        
+        # Build workflow inputs
+        inputs = {
+            "page_name": page_data["name"],
+            "page_niche": page_data["niche"],
+            "facebook_page_id": fb_token["external_id"] if fb_token else "",
+            "facebook_access_token": fb_token["access_token"] if fb_token else "",
+            "instagram_account_id": ig_token["external_id"] if ig_token else "",
+        }
+        
+        # Trigger workflow via GitHub API
+        url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/actions/workflows/{workflow_filename}/dispatches"
+        headers = {
+            "Authorization": f"token {github_token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        payload = {
+            "ref": "main",
+            "inputs": inputs
+        }
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        
+        if response.status_code == 204:
+            # Log the run
+            run_id = log_run(page_id, "workflow_trigger", "triggered", details=inputs)
+            return {"success": True, "run_id": run_id, "message": "Workflow triggered successfully"}
+        else:
+            error_msg = response.json().get("message", "Unknown error")
+            return {"success": False, "error": error_msg}
+    
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+def update_run_status(run_id, status, details=None, error_message=None):
+    """Update the status of a workflow run."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE run_history 
+                   SET status = %s, completed_at = NOW(), details = %s, error_message = %s
+                   WHERE id = %s""",
+                (status, details, error_message, run_id)
+            )
+            conn.commit()
