@@ -357,7 +357,7 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
             "Meta Description": {"rich_text": [{"text": {"content": meta_description}}]},
             "Keywords": {"rich_text": [{"text": {"content": keywords}}]},
             "Content": {"rich_text": [{"text": {"content": excerpt}}]},
-            "Published": {"checkbox": False},
+            "Published": {"checkbox": True},
             "Created": {"date": {"start": current_datetime}},
             "Blog Source": {"select": {"name": "AI Generated"}}
         },
