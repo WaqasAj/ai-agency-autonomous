@@ -80,7 +80,7 @@ if page == "📊 Dashboard":
                             if not _token:
                                 st.error("❌ WORKFLOW_TRIGGER_TOKEN not set in Streamlit secrets!")
                             else:
-                                result = db.trigger__workflow(
+                                result = db.trigger_github_workflow(
                                     page_id=p['id'],
                                     _token=_token,
                                     repo_owner="WaqasAj",  # Replace with your  username
@@ -153,7 +153,7 @@ elif page == "📱 Pages":
                                 if not _token:
                                     st.error("❌ WORKFLOW_TRIGGER_TOKEN not set in Streamlit secrets!")
                                 else:
-                                    result = db.trigger__workflow(
+                                    result = db.trigger_github_workflow(
                                         page_id=p['id'],
                                         _token=_token,
                                         repo_owner="WaqasAj",  # Replace with your  username
