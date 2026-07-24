@@ -346,6 +346,9 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
     clean_content = clean_blog_content(full_blog_content, clean_t)
     excerpt = clean_content[:500] if clean_content else ""
     
+    # Get current date and time in ISO format for Notion
+    current_datetime = datetime.now().isoformat()
+    
     payload = {
         "parent": {"database_id": NOTION_DB_ID},
         "properties": {
@@ -355,6 +358,7 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
             "Keywords": {"rich_text": [{"text": {"content": keywords}}]},
             "Content": {"rich_text": [{"text": {"content": excerpt}}]},
             "Published": {"checkbox": False},
+            "Created": {"date": {"start": current_datetime}},
             "Blog Source": {"select": {"name": "AI Generated"}}
         },
         "children": [
@@ -368,12 +372,11 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
     
     if response.status_code == 200:
         page_id = response.json()["id"]
-        print(f"✅ Created Notion page: {clean_t}")
+        print(f"✅ Created Notion page: {clean_t} (Created: {current_datetime})")
         return page_id
     else:
         print(f"❌ Failed to create page: {response.status_code} - {response.text}")
         return None
-
 def fetch_unprocessed_published_blogs():
     """Fetch blogs that are published but not yet promoted on social media."""
     url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
@@ -441,6 +444,36 @@ def update_social_status(page_id, status):
         print(f"✅ Updated Status to: {status}")
     else:
         print(f"⚠️ Failed to update Status: {response.status_code} - {response.text}")
+
+def fetch_recent_blog_titles(days=30, limit=20):
+    """Fetch recent blog titles to check for duplicates."""
+    url = f"https://api.notion.com/v1/databases/{NOTION_DB_ID}/query"
+    
+    # Calculate date threshold
+    date_threshold = (datetime.now() - timedelta(days=days)).isoformat()
+    
+    payload = {
+        "filter": {
+            "property": "Published",
+            "checkbox": {"equals": True}
+        },
+        "sorts": [{"timestamp": "created_time", "direction": "descending"}],
+        "page_size": limit
+    }
+    
+    response = requests.post(url, headers=notion_headers(), json=payload)
+    
+    titles = []
+    if response.status_code == 200:
+        results = response.json().get("results", [])
+        for result in results:
+            title_props = result["properties"].get("Title", {}).get("title", [])
+            if title_props:
+                title = title_props[0].get("text", {}).get("content", "")
+                if title:
+                    titles.append(title)
+    
+    return titles
 
 def log_to_notion(blog_title, agent_output):
     """Create a log entry showing what the agents did."""
@@ -772,8 +805,13 @@ def run_blog_creation_phase():
 PREVIOUS CEO FEEDBACK:
 {ceo_feedback}
 
+🚨 IMPORTANT: If the CEO rejected for DUPLICATE CONTENT, you MUST pick a COMPLETELY DIFFERENT 
+topic within the same niche. Do NOT just rewrite the same topic. Choose a fresh angle that 
+doesn't overlap with these recent posts:
+{recent_titles_text}
+
 Fix ALL the issues mentioned. Apply every specific change requested.
-Maintain the same topic: {title}
+Maintain the same niche focus but with a unique angle.
 
 {HUMANIZATION_RULES}
 {memory_context}
@@ -826,6 +864,10 @@ FOUNDER'S STRATEGY (you MUST enforce this):
 - Brand Rules: {strategy['brand_rules']}
 """
         
+        # Fetch recent titles for duplicate check
+        recent_titles = fetch_recent_blog_titles(days=30, limit=15)
+        recent_titles_text = "\n".join([f"- {t}" for t in recent_titles]) if recent_titles else "No recent posts"
+        
         review_task = Task(
             description=f"""Review the blog post rigorously against ALL criteria:
         - HUMANIZATION (most important): Does it sound like a real parent? Check for AI clichés.
@@ -834,6 +876,26 @@ FOUNDER'S STRATEGY (you MUST enforce this):
         - Brand voice alignment (warm, trustworthy, real)
         - Genuine value to parents
         - GEO/SEO structure (clear headings, direct answers)
+        
+        🚨 DUPLICATE CONTENT CHECK (CRITICAL):
+        Compare this post's topic against recent posts:
+        {recent_titles_text}
+        
+        If the topic is TOO SIMILAR to any recent post (same core subject, same angle), 
+        you MUST REJECT it with this exact message:
+        "DECISION: REJECTED - DUPLICATE CONTENT: This topic overlaps with '[similar title]'. 
+        Choose a completely different angle or subtopic within the niche."
+        
+        {strategy_context}
+        
+        Output in EXACT format:
+        DECISION: APPROVED or REJECTED
+        SCORE: X/10
+        REASONS: [bullet list]
+        FIXES_NEEDED: [bullet list - only if REJECTED]""",
+            expected_output="DECISION, SCORE, REASONS, and FIXES_NEEDED",
+            agent=ceo_reviewer
+        )
         
         {strategy_context}
         
