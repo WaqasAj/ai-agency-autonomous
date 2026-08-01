@@ -77,8 +77,28 @@ def render_page_card(p):
             st.session_state.editing_page = p["id"]
     with b4:
         if st.button("🗑️ Delete", key=f"del_{p['id']}"):
-            st.session_state.deleting_page = p["id"]
+            st.session_state.confirm_delete_id = p['id']
+            st.session_state.confirm_delete_name = p['name']
 
+    # Show confirmation dialog if delete was clicked
+    if 'confirm_delete_id' in st.session_state and st.session_state.confirm_delete_id == p['id']:
+        st.warning(f"⚠️ Are you sure you want to delete **'{st.session_state.confirm_delete_name}'**? This will permanently remove the page, its tokens, and run history.")
+        col_yes, col_no = st.columns(2)
+        with col_yes:
+            if st.button("✅ Yes, Delete Permanently", type="primary", key=f"confirm_yes_{p['id']}"):
+                try:
+                    db.delete_page(st.session_state.confirm_delete_id)
+                    st.success("🗑️ Page deleted successfully!")
+                    del st.session_state.confirm_delete_id
+                    del st.session_state.confirm_delete_name
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to delete: {e}")
+        with col_no:
+            if st.button("❌ Cancel", key=f"confirm_no_{p['id']}"):
+                del st.session_state.confirm_delete_id
+                del st.session_state.confirm_delete_name
+                st.rerun()
 
 # ============ DASHBOARD ============
 if page == "📊 Dashboard":
