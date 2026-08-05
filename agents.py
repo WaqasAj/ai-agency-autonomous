@@ -35,14 +35,82 @@ IG_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID")
 STRATEGY_DB_ID = os.getenv("STRATEGY_DB_ID")
 MEMORY_DB_ID = os.getenv("MEMORY_DB_ID")
 PAGE_NAME = os.getenv("PAGE_NAME", "Kahani AI")
+PAGE_NICHE = os.getenv("PAGE_NICHE", "general")
+PAGE_DESCRIPTION = os.getenv("PAGE_DESCRIPTION", "")  # NEW: For sub-niche differentiation
 
 os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
 
-# ============ BRAND CONTEXT ============
+# ============ NICHE-SPECIFIC BRAND CONTEXT ============
+NICHE_GUIDANCE = {
+    "parenting": """
+Focus on: bedtime routines, child development, screen-free activities, family bonding, 
+multilingual education, cultural stories, practical parenting tips.
+Tone: Warm, empathetic, understanding, like a trusted friend who's been there.
+Audience: Parents of children ages 0-12, educators, families.
+""",
+    "technology": """
+Focus on: tech tutorials, gadget reviews, software tips, productivity tools, 
+digital literacy, troubleshooting, emerging tech trends.
+Tone: Clear, practical, jargon-free but not dumbed down, helpful.
+Audience: Tech enthusiasts, professionals, beginners wanting to learn.
+""",
+    "tech": """
+Focus on: tech tutorials, gadget reviews, software tips, productivity tools, 
+digital literacy, troubleshooting, emerging tech trends.
+Tone: Clear, practical, jargon-free but not dumbed down, helpful.
+Audience: Tech enthusiasts, professionals, beginners wanting to learn.
+""",
+    "fitness": """
+Focus on: workout routines, nutrition tips, mental health, wellness practices, 
+home exercises, fitness motivation, healthy habits.
+Tone: Motivating, encouraging, realistic, no toxic positivity.
+Audience: Fitness beginners to intermediate, busy professionals, health-conscious individuals.
+""",
+    "business": """
+Focus on: entrepreneurship, marketing strategies, productivity, leadership, 
+small business tips, financial planning, growth hacks.
+Tone: Professional but approachable, actionable, data-driven.
+Audience: Entrepreneurs, small business owners, professionals, freelancers.
+""",
+    "food": """
+Focus on: recipes, cooking tips, meal planning, nutrition, cultural dishes, 
+quick meals, healthy eating, food photography.
+Tone: Passionate, sensory, inviting, practical.
+Audience: Home cooks, foodies, busy parents, health-conscious eaters.
+""",
+    "travel": """
+Focus on: travel guides, destination reviews, budget travel, cultural experiences, 
+packing tips, travel hacks, local insights.
+Tone: Adventurous, informative, inspiring, practical.
+Audience: Travelers, digital nomads, vacation planners, adventure seekers.
+""",
+    "education": """
+Focus on: learning strategies, study tips, educational resources, teaching methods, 
+skill development, online courses, academic success.
+Tone: Encouraging, clear, structured, supportive.
+Audience: Students, teachers, lifelong learners, parents helping kids.
+""",
+    "general": """
+Focus on: practical advice, actionable insights, real-world examples, problem-solving.
+Tone: Warm, trustworthy, authoritative, genuinely helpful.
+Audience: General audience seeking valuable content.
+"""
+}
+
+# Get niche-specific guidance (fallback to general if niche not in dictionary)
+niche_lower = PAGE_NICHE.lower()
+NICHE_CONTEXT = NICHE_GUIDANCE.get(niche_lower, NICHE_GUIDANCE["general"])
+
+# Build comprehensive brand context with description for sub-niche differentiation
 BRAND_CONTEXT = f"""
-{PAGE_NAME} is a platform creating valuable, engaging content for its target audience. 
-Brand voice: Warm, trustworthy, authoritative, and genuinely helpful.
-Content themes: Practical advice, real-world examples, actionable insights, and family-friendly topics.
+{PAGE_NAME} creates valuable content in the {PAGE_NICHE} niche.
+
+{NICHE_CONTEXT}
+
+SPECIFIC FOCUS: {PAGE_DESCRIPTION if PAGE_DESCRIPTION else 'General content in this niche'}
+
+Content themes: Practical advice, real-world examples, actionable insights, and engaging storytelling.
+All content should naturally relate to {PAGE_NAME} and its specific purpose as described above.
 """
 
 # ============ HUMANIZATION GUIDELINES ============
@@ -209,7 +277,7 @@ CRITICAL: Keep it SHORT (under 200 chars) and specify REALISTIC PHOTOGRAPHY.""",
             agents=[image_prompt_creator],
             tasks=[image_task],
             process=Process.sequential,
-            verbose=False  # Reduce noise
+            verbose=False
         )
         
         image_crew.kickoff()
@@ -266,6 +334,7 @@ CRITICAL: Keep it SHORT (under 200 chars) and specify REALISTIC PHOTOGRAPHY.""",
         fallback_url = f"https://image.pollinations.ai/prompt/professional%20photography?width=1200&height=675&model=flux&nologo=true&seed={seed}"
         print(f"⚠️ Using emergency fallback URL: {fallback_url}")
         return fallback_url
+
 # ============ NOTION PAGE CREATION (WITH MULTI-SITE TAG) ============
 def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url, page_name=PAGE_NAME):
     """Create a Notion page with properties and body, tagged with the specific Page name."""
@@ -481,21 +550,25 @@ def post_to_facebook(image_url, caption):
 FREE_MODEL = "mistral/mistral-small-latest"
 
 trend_researcher = Agent(
-    role="Senior Content Strategist & Trend Analyst",
-    goal="Identify UNIQUE, HIGH-VALUE blog topics that solve real problems and have low competition",
-    backstory=f"""You are a veteran content strategist. You DON'T just find trending topics - you find CONTENT GAPS.
+    role=f"Senior Content Strategist for {PAGE_NICHE} Niche",
+    goal=f"Identify UNIQUE, HIGH-VALUE blog topics in the {PAGE_NICHE} niche that solve real problems",
+    backstory=f"""You are a veteran content strategist specializing in the {PAGE_NICHE} niche.
     {BRAND_CONTEXT}
-    You output topics that are specific, timely, valuable, and defensible. Avoid generic topics.""",
+    You find CONTENT GAPS where people are searching but finding poor answers.
+    You output topics that are specific to {PAGE_NICHE} and relevant to {PAGE_NAME}'s specific focus.
+    Topics must be timely, valuable, and defensible.""",
     llm=FREE_MODEL,
     verbose=True
 )
 
 blog_writer = Agent(
-    role="Expert Blog Writer & Storyteller",
-    goal="Write blog posts that feel like they were written by a trusted friend who happens to be an expert",
-    backstory=f"""You are a master storyteller. Your writing feels like a conversation with a knowledgeable friend.
+    role=f"Expert Blog Writer for {PAGE_NAME} ({PAGE_NICHE} Content)",
+    goal=f"Write {PAGE_NICHE} blog posts that feel like they were written by a trusted expert in the field",
+    backstory=f"""You are a master storyteller and {PAGE_NICHE} expert.
     {BRAND_CONTEXT}
     {HUMANIZATION_RULES}
+    You write specifically for the {PAGE_NICHE} audience with their unique needs and interests.
+    All content should naturally relate to {PAGE_NAME} and its specific purpose.
     Structure: Hook, Problem/Context, Solution/Insight, Examples, Common Mistakes, Step-by-Step Guide, FAQ, Conclusion.
     Aim for 1,500-2,000 words. Write for HUMANS first, search engines second.""",
     llm=FREE_MODEL,
@@ -516,14 +589,17 @@ seo_geo_optimizer = Agent(
 )
 
 ceo_reviewer = Agent(
-    role="Chief Content Officer & Quality Gatekeeper",
-    goal="Ensure every piece of content meets the highest standards of quality, originality, and brand alignment",
-    backstory=f"""You are the final quality gate. You are OBSESSED with human-sounding content and can spot AI writing from a mile away.
+    role=f"Chief Content Officer for {PAGE_NAME} ({PAGE_NICHE} Niche)",
+    goal=f"Ensure every {PAGE_NICHE} blog post meets the highest standards of quality and niche relevance",
+    backstory=f"""You are the final quality gate for {PAGE_NICHE} content.
     {BRAND_CONTEXT}
+    
+    You evaluate content specifically for the {PAGE_NICHE} audience and their expectations.
+    Content must be relevant to {PAGE_NAME}'s specific focus and purpose.
     
     REVIEW CRITERIA:
     1. HUMANIZATION (40%): Real person voice, no AI clichés, specific examples.
-    2. ORIGINALITY (30%): Fresh angle, actionable advice.
+    2. NICHE RELEVANCE (30%): Is this truly valuable for {PAGE_NICHE} audience and relevant to {PAGE_NAME}?
     3. BRAND ALIGNMENT (15%): Matches voice and values.
     4. SEO/GEO (10%): Optimized structure.
     5. TECHNICAL (5%): Grammar, formatting.
@@ -602,7 +678,7 @@ poster = Agent(
 # ============ PHASE 1: BLOG CREATION WITH FEEDBACK LOOP ============
 def run_blog_creation_phase():
     print("\n" + "="*60)
-    print(f"PHASE 1: BLOG CREATION for {PAGE_NAME}")
+    print(f"PHASE 1: BLOG CREATION for {PAGE_NAME} ({PAGE_NICHE})")
     print("="*60)
     
     strategy = fetch_active_strategy()
@@ -621,16 +697,17 @@ def run_blog_creation_phase():
         print(f"ATTEMPT {attempt}/{MAX_REVISIONS}")
         print(f"{'='*40}")
         
-        print(f"\n[Step 1] Researching fresh topic...")
+        print(f"\n[Step 1] Researching fresh topic for {PAGE_NICHE} niche...")
         if ceo_feedback:
             research_description = (
-                "Research ONE trending blog topic.\n\n"
+                f"Research ONE trending blog topic in the {PAGE_NICHE} niche.\n\n"
                 "CRITICAL: The previous topic was REJECTED. You MUST pick a COMPLETELY DIFFERENT topic. "
                 "Do NOT revisit the same subject. Output ONLY the blog topic/title as plain text."
             )
         else:
             research_description = (
-                "Research ONE trending, high-value blog topic perfect for our audience. "
+                f"Research ONE trending, high-value blog topic in the {PAGE_NICHE} niche perfect for our audience. "
+                f"The topic must be relevant to {PAGE_NAME}'s specific focus. "
                 "Output ONLY the blog topic/title as plain text, no quotes, no markdown."
             )
         
@@ -651,12 +728,14 @@ def run_blog_creation_phase():
         if success_memories:
             memory_context += "\n\nFOLLOW THESE PAST SUCCESSES:\n" + "\n".join([f"- {mem['summary']}" for mem in success_memories[:3]])
         
-        print(f"\n[Step 2] Writing blog post...")
+        print(f"\n[Step 2] Writing blog post for {PAGE_NICHE} audience...")
         write_description = (
             f"Write a complete, engaging blog post (1500-2000 words) on this topic: {title}\n\n"
+            f"This content is for {PAGE_NAME} which focuses on: {PAGE_DESCRIPTION if PAGE_DESCRIPTION else PAGE_NICHE}\n\n"
             f"{HUMANIZATION_RULES}\n{memory_context}\n\n"
             "Structure: Hook, Problem, Solution, Examples, Common Mistakes, Step-by-Step, FAQ, Conclusion. "
-            "Use ## for section headings. Do NOT repeat the title at the top."
+            "Use ## for section headings. Do NOT repeat the title at the top. "
+            "Naturally relate content to the page's specific focus where appropriate."
         )
         write_task = Task(description=write_description, expected_output="A complete, human-sounding blog post", agent=blog_writer)
         
@@ -667,11 +746,11 @@ def run_blog_creation_phase():
             agent=seo_geo_optimizer
         )
         
-        print(f"\n[Step 4] CEO reviewing...")
+        print(f"\n[Step 4] CEO reviewing for {PAGE_NICHE} relevance...")
         strategy_context = f"\nFOUNDER'S STRATEGY:\n- Goal: {strategy['goal']}\n- Audience: {strategy['target_audience']}\n" if strategy else ""
         
         review_description = (
-            "Review the blog post rigorously.\n"
+            f"Review the blog post rigorously for {PAGE_NICHE} niche relevance and {PAGE_NAME} alignment.\n"
             "DUPLICATE CONTENT CHECK: Compare against recent posts:\n"
             f"{recent_titles_text}\n\n"
             "If the topic is TOO SIMILAR, REJECT it with: 'DECISION: REJECTED - DUPLICATE CONTENT: This topic overlaps with [title]. Choose a different angle.'\n\n"
@@ -761,7 +840,7 @@ def run_social_promotion_phase():
 
 # ============ MAIN EXECUTION ============
 def run_daily_agency():
-    print(f"🚀 Starting Autonomous Agency for {PAGE_NAME} at {datetime.now()}")
+    print(f"🚀 Starting Autonomous Agency for {PAGE_NAME} ({PAGE_NICHE}) at {datetime.now()}")
     print(BRAND_CONTEXT)
     
     try:
