@@ -182,69 +182,90 @@ def generate_blog_image_with_agent(title, blog_content, keywords, page_name=PAGE
     """Use an AI agent to analyze the blog content and generate a contextual image prompt."""
     print("\n🎨 Analyzing blog content for image generation...")
     
-    content_preview = blog_content[:2000]
-    
-    image_task = Task(
-        description=f"""Analyze this blog post and create a detailed image generation prompt for a professional, realistic photograph.
+    try:
+        content_preview = blog_content[:2000]
+        
+        image_task = Task(
+            description=f"""Analyze this blog post and create a SHORT image generation prompt (max 200 characters) for a professional, realistic photograph.
 
 BLOG TITLE: {title}
 KEYWORDS: {keywords}
-CONTENT PREVIEW: {content_preview}
+CONTENT PREVIEW: {content_preview[:500]}
 
 YOUR TASK:
-1. Read the content and identify the CORE THEME and EMOTION
-2. Determine what VISUAL SCENE would best represent this topic
-3. Create a detailed prompt for a REALISTIC photograph (NOT cartoon, NOT illustration)
-
-PROMPT STRUCTURE:
-- Subject: Who/what is the main focus? (be specific)
-- Setting: Where is this happening? (be detailed)
-- Action: What's happening? (be dynamic)
-- Style: Professional photography (camera model, lens, lighting)
-- Mood: What feeling? (be emotional)
-- Technical: Quality specs (resolution, focus, colors)
+Create ONE SHORT prompt (max 200 chars) for a realistic photograph that represents this blog.
 
 OUTPUT FORMAT (exact):
-IMAGE_PROMPT: [your detailed prompt here]
+IMAGE_PROMPT: [short prompt under 200 characters]
 
-CRITICAL: Must be REALISTIC PHOTOGRAPHY, directly relevant to content, high quality.""",
-        expected_output="A detailed, contextual image generation prompt for realistic photography",
-        agent=image_prompt_creator
-    )
-    
-    image_crew = Crew(
-        agents=[image_prompt_creator],
-        tasks=[image_task],
-        process=Process.sequential,
-        verbose=True
-    )
-    
-    image_crew.kickoff()
-    image_output = image_task.output.raw.strip() if image_task.output else ""
-    
-    image_prompt = ""
-    for line in image_output.split('\n'):
-        if line.startswith("IMAGE_PROMPT:"):
-            image_prompt = line.replace("IMAGE_PROMPT:", "").strip()
-            break
-    
-    if not image_prompt:
-        image_prompt = image_output
-    
-    print(f"✅ Agent generated contextual image prompt")
-    
-       # Shorten the prompt to fit URL limits
-    short_prompt = image_prompt[:500]  # Limit prompt length
-    seed = hash(title + page_name) % 10000
-    
-    # Use a simpler URL structure
-    image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(short_prompt)}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
-    
-    # If still too long, use a fallback generic prompt
-    if len(image_url) > 1900:
-        fallback_prompt = f"professional photography, {title}, realistic, high quality"
-        image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(fallback_prompt)}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
+Example: "IMAGE_PROMPT: mother reading to child in cozy living room, warm lighting, professional photography"
 
+CRITICAL: Keep it SHORT (under 200 chars) and specify REALISTIC PHOTOGRAPHY.""",
+            expected_output="A short image generation prompt under 200 characters",
+            agent=image_prompt_creator
+        )
+        
+        image_crew = Crew(
+            agents=[image_prompt_creator],
+            tasks=[image_task],
+            process=Process.sequential,
+            verbose=False  # Reduce noise
+        )
+        
+        image_crew.kickoff()
+        image_output = image_task.output.raw.strip() if image_task.output else ""
+        
+        print(f"Agent output: {image_output[:200]}")
+        
+        # Extract the image prompt
+        image_prompt = ""
+        for line in image_output.split('\n'):
+            if "IMAGE_PROMPT:" in line:
+                image_prompt = line.split("IMAGE_PROMPT:")[-1].strip()
+                break
+        
+        # If extraction failed, use the entire output
+        if not image_prompt:
+            image_prompt = image_output[:200]
+        
+        # If still empty, use a fallback
+        if not image_prompt or len(image_prompt) < 10:
+            print("⚠️ Agent output empty, using fallback prompt")
+            image_prompt = f"professional photography, {title}, realistic, high quality"
+        
+        # Ensure prompt is short enough for URL
+        image_prompt = image_prompt[:200]
+        
+        print(f"✅ Image prompt: {image_prompt}")
+        
+        # Generate URL with proper encoding
+        seed = hash(title + page_name) % 10000
+        encoded_prompt = requests.utils.quote(image_prompt)
+        
+        # Build URL
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
+        
+        # Final safety check - if URL too long, use ultra-short fallback
+        if len(image_url) > 1900:
+            print("⚠️ URL too long, using minimal fallback")
+            short_title = title[:30]
+            image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(short_title)}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
+        
+        # Ensure we never return None
+        if not image_url:
+            print("❌ CRITICAL: image_url is None, using emergency fallback")
+            image_url = "https://image.pollinations.ai/prompt/professional%20photography?width=1200&height=675&model=flux&nologo=true&seed=1234"
+        
+        print(f"✅ Generated image URL (length: {len(image_url)})")
+        return image_url
+        
+    except Exception as e:
+        print(f"❌ Error in image generation: {e}")
+        # Emergency fallback
+        seed = hash(title + page_name) % 10000
+        fallback_url = f"https://image.pollinations.ai/prompt/professional%20photography?width=1200&height=675&model=flux&nologo=true&seed={seed}"
+        print(f"⚠️ Using emergency fallback URL: {fallback_url}")
+        return fallback_url
 # ============ NOTION PAGE CREATION (WITH MULTI-SITE TAG) ============
 def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url, page_name=PAGE_NAME):
     """Create a Notion page with properties and body, tagged with the specific Page name."""
