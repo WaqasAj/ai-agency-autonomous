@@ -233,22 +233,17 @@ CRITICAL: Must be REALISTIC PHOTOGRAPHY, directly relevant to content, high qual
     
     print(f"✅ Agent generated contextual image prompt")
     
-    negative_prompt = (
-        "cartoon, illustration, anime, drawing, painting, distorted, deformed, ugly, blurry, "
-        "low quality, extra fingers, mutated hands, poorly drawn face, mutation, extra limbs, "
-        "cloned face, disfigured, long neck, bad anatomy, bad proportions, malformed limbs, "
-        "missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, "
-        "text, watermark, logo, signature, unnatural lighting, oversaturated"
-    )
-    
-    full_prompt = f"{image_prompt}. Style: {negative_prompt}"
-    encoded_prompt = requests.utils.quote(full_prompt)
-    
+       # Shorten the prompt to fit URL limits
+    short_prompt = image_prompt[:500]  # Limit prompt length
     seed = hash(title + page_name) % 10000
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
     
-    print(f"✅ Generated contextual realistic image")
-    return image_url
+    # Use a simpler URL structure
+    image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(short_prompt)}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
+    
+    # If still too long, use a fallback generic prompt
+    if len(image_url) > 1900:
+        fallback_prompt = f"professional photography, {title}, realistic, high quality"
+        image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(fallback_prompt)}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
 
 # ============ NOTION PAGE CREATION (WITH MULTI-SITE TAG) ============
 def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url, page_name=PAGE_NAME):
