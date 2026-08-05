@@ -225,6 +225,7 @@ def trigger_github_workflow(page_id, github_token, repo_owner, repo_name, workfl
         inputs = {
             "page_name": page_data["name"],
             "page_niche": page_data["niche"],
+            "page_description": page_data.get("description", ""), 
             "facebook_page_id": fb_token["external_id"] if fb_token else "",
             "facebook_access_token": fb_token["access_token"] if fb_token else "",
             "instagram_account_id": ig_token["external_id"] if ig_token else "",
