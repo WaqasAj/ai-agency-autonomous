@@ -34,7 +34,7 @@ FB_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
 IG_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID")
 STRATEGY_DB_ID = os.getenv("STRATEGY_DB_ID")
 MEMORY_DB_ID = os.getenv("MEMORY_DB_ID")
-PAGE_NAME = os.getenv("PAGE_NAME", "Kahani AI")  # NEW: For multi-site differentiation
+PAGE_NAME = os.getenv("PAGE_NAME", "Kahani AI")
 
 os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
 
@@ -177,37 +177,77 @@ def save_to_memory(summary, memory_type, content, outcome, reason, confidence=5)
         return response.json()["id"]
     return None
 
-# ============ IMAGE GENERATION (REALISTIC & HIGH QUALITY) ============
-def generate_blog_image(title, keywords, page_name=PAGE_NAME):
-    """Generate a professional, high-quality realistic image for the blog post."""
-    print("\n🎨 Generating professional blog image...")
+# ============ AGENT-DRIVEN IMAGE GENERATION ============
+def generate_blog_image_with_agent(title, blog_content, keywords, page_name=PAGE_NAME):
+    """Use an AI agent to analyze the blog content and generate a contextual image prompt."""
+    print("\n🎨 Analyzing blog content for image generation...")
     
-    clean_title = re.sub(r'[^a-zA-Z0-9\s]', '', title)[:50]
+    content_preview = blog_content[:2000]
     
-    # Professional photography prompt structure
-    prompt = (
-        f"Professional lifestyle photography, {clean_title}, high quality, vibrant colors, "
-        f"natural lighting, authentic human emotions, sharp focus, 8k resolution, photorealistic, "
-        f"diverse and inclusive subjects, warm and inviting atmosphere, suitable for {page_name} blog"
+    image_task = Task(
+        description=f"""Analyze this blog post and create a detailed image generation prompt for a professional, realistic photograph.
+
+BLOG TITLE: {title}
+KEYWORDS: {keywords}
+CONTENT PREVIEW: {content_preview}
+
+YOUR TASK:
+1. Read the content and identify the CORE THEME and EMOTION
+2. Determine what VISUAL SCENE would best represent this topic
+3. Create a detailed prompt for a REALISTIC photograph (NOT cartoon, NOT illustration)
+
+PROMPT STRUCTURE:
+- Subject: Who/what is the main focus? (be specific)
+- Setting: Where is this happening? (be detailed)
+- Action: What's happening? (be dynamic)
+- Style: Professional photography (camera model, lens, lighting)
+- Mood: What feeling? (be emotional)
+- Technical: Quality specs (resolution, focus, colors)
+
+OUTPUT FORMAT (exact):
+IMAGE_PROMPT: [your detailed prompt here]
+
+CRITICAL: Must be REALISTIC PHOTOGRAPHY, directly relevant to content, high quality.""",
+        expected_output="A detailed, contextual image generation prompt for realistic photography",
+        agent=image_prompt_creator
     )
     
-    # Explicit negative prompt to prevent AI artifacts and cartoons
+    image_crew = Crew(
+        agents=[image_prompt_creator],
+        tasks=[image_task],
+        process=Process.sequential,
+        verbose=True
+    )
+    
+    image_crew.kickoff()
+    image_output = image_task.output.raw.strip() if image_task.output else ""
+    
+    image_prompt = ""
+    for line in image_output.split('\n'):
+        if line.startswith("IMAGE_PROMPT:"):
+            image_prompt = line.replace("IMAGE_PROMPT:", "").strip()
+            break
+    
+    if not image_prompt:
+        image_prompt = image_output
+    
+    print(f"✅ Agent generated contextual image prompt")
+    
     negative_prompt = (
         "cartoon, illustration, anime, drawing, painting, distorted, deformed, ugly, blurry, "
         "low quality, extra fingers, mutated hands, poorly drawn face, mutation, extra limbs, "
         "cloned face, disfigured, long neck, bad anatomy, bad proportions, malformed limbs, "
         "missing arms, missing legs, extra arms, extra legs, fused fingers, too many fingers, "
-        "text, watermark, logo, signature, unnatural lighting"
+        "text, watermark, logo, signature, unnatural lighting, oversaturated"
     )
     
-    full_prompt = f"{prompt}. Negative prompt: {negative_prompt}"
+    full_prompt = f"{image_prompt}. Style: {negative_prompt}"
     encoded_prompt = requests.utils.quote(full_prompt)
     
-    # Use flux model for realistic results, add seed for consistency
     seed = hash(title + page_name) % 10000
     image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
     
-    print(f"✅ Generated realistic image")
+    print(f"✅ Generated contextual realistic image")
     return image_url
 
 # ============ NOTION PAGE CREATION (WITH MULTI-SITE TAG) ============
@@ -231,7 +271,7 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
             "Published": {"checkbox": True},
             "Created": {"date": {"start": current_datetime}},
             "Blog Source": {"select": {"name": "AI Generated"}},
-            "Page": {"select": {"name": page_name}}  # NEW: Tags which site this belongs to
+            "Page": {"select": {"name": page_name}}
         },
         "children": [
             {"object": "block", "type": "image", "image": {"type": "external", "external": {"url": image_url}}},
@@ -277,7 +317,7 @@ def fetch_unprocessed_published_blogs():
         "filter": {
             "and": [
                 {"property": "Published", "checkbox": {"equals": True}},
-                {"property": "Page", "select": {"equals": PAGE_NAME}},  # Only process blogs for THIS page
+                {"property": "Page", "select": {"equals": PAGE_NAME}},
                 {"or": [
                     {"property": "Status", "status": {"equals": "Not Processed"}},
                     {"property": "Status", "status": {"is_empty": True}}
@@ -326,7 +366,7 @@ def fetch_recent_blog_titles(days=30, limit=20):
         "filter": {
             "and": [
                 {"property": "Published", "checkbox": {"equals": True}},
-                {"property": "Page", "select": {"equals": PAGE_NAME}}  # Only check duplicates for THIS page
+                {"property": "Page", "select": {"equals": PAGE_NAME}}
             ]
         },
         "sorts": [{"timestamp": "created_time", "direction": "descending"}],
@@ -357,7 +397,7 @@ def log_to_notion(blog_title, agent_output):
             "Page": {"select": {"name": PAGE_NAME}}
         }
     }
-    response = requests.post(url, headers=notion_headers(), json=p.payload)
+    response = requests.post(url, headers=notion_headers(), json=payload)
     if response.status_code == 200:
         print(f"✅ Logged results to Notion for: {clean_t}")
 
@@ -421,7 +461,7 @@ def post_to_facebook(image_url, caption):
         return response.json().get("id")
     return None
 
-# ============ DEFINE THE 7 AUTONOMOUS AGENTS ============
+# ============ DEFINE THE AUTONOMOUS AGENTS ============
 FREE_MODEL = "mistral/mistral-small-latest"
 
 trend_researcher = Agent(
@@ -483,6 +523,42 @@ ceo_reviewer = Agent(
     verbose=True
 )
 
+image_prompt_creator = Agent(
+    role="Visual Content Director & Image Prompt Engineer",
+    goal="Analyze blog content and create detailed, contextual image prompts for professional, realistic photographs",
+    backstory="""You are a visual storytelling expert who understands what makes images perform well on blogs and social media.
+    
+YOUR EXPERTISE:
+- You can read a blog post and instantly identify the CORE EMOTION and KEY SCENE
+- You know that REALISTIC PHOTOGRAPHY gets 73% more engagement than illustrations
+- You understand composition, lighting, color theory, and visual hierarchy
+- You create prompts that generate authentic, diverse, emotionally resonant images
+
+YOUR PROCESS:
+1. Read the blog content thoroughly
+2. Identify the main theme, emotion, and key message
+3. Determine what VISUAL SCENE would best represent this content
+4. Create a detailed prompt following this structure:
+   - Subject: Who/what is the focus? (be specific and human)
+   - Setting: Where is this? (be detailed and atmospheric)
+   - Action: What's happening? (be dynamic and storytelling)
+   - Style: Professional photography (camera model, lens, lighting)
+   - Mood: What emotion? (warm, joyful, intimate, inspiring)
+   - Technical: Quality specs (resolution, focus, colors)
+   - Diversity: Authentic, inclusive representation
+
+CRITICAL RULES:
+- ALWAYS specify REALISTIC PHOTOGRAPHY (never cartoon, illustration, or anime)
+- ALWAYS include specific camera/lens details for authenticity
+- ALWAYS emphasize natural lighting and authentic emotions
+- ALWAYS ensure the image directly relates to the blog content
+- ALWAYS include diverse, realistic human subjects when appropriate
+
+You create images that stop the scroll and build emotional connection.""",
+    llm=FREE_MODEL,
+    verbose=True
+)
+
 social_strategist = Agent(
     role="Social Media Strategist",
     goal="Decide which platforms to use and what angle for each",
@@ -529,7 +605,6 @@ def run_blog_creation_phase():
         print(f"ATTEMPT {attempt}/{MAX_REVISIONS}")
         print(f"{'='*40}")
         
-        # STEP 1: FRESH RESEARCH on every attempt
         print(f"\n[Step 1] Researching fresh topic...")
         if ceo_feedback:
             research_description = (
@@ -551,18 +626,15 @@ def run_blog_creation_phase():
         final_title = title
         print(f"\nTopic selected: {title}")
         
-        # STEP 2: Fetch recent titles for duplicate check
         recent_titles = fetch_recent_blog_titles(days=30, limit=15)
         recent_titles_text = "\n".join([f"- {t}" for t in recent_titles]) if recent_titles else "No recent posts"
         
-        # STEP 3: Build memory context
         memory_context = ""
         if failure_memories:
             memory_context += "\n\nAVOID THESE PAST FAILURES:\n" + "\n".join([f"- {mem['summary']}: {mem['reason']}" for mem in failure_memories[:3]])
         if success_memories:
             memory_context += "\n\nFOLLOW THESE PAST SUCCESSES:\n" + "\n".join([f"- {mem['summary']}" for mem in success_memories[:3]])
         
-        # STEP 4: Writer writes on the FRESH topic
         print(f"\n[Step 2] Writing blog post...")
         write_description = (
             f"Write a complete, engaging blog post (1500-2000 words) on this topic: {title}\n\n"
@@ -572,7 +644,6 @@ def run_blog_creation_phase():
         )
         write_task = Task(description=write_description, expected_output="A complete, human-sounding blog post", agent=blog_writer)
         
-        # STEP 5: SEO/GEO optimization
         print(f"\n[Step 3] Optimizing SEO/GEO...")
         seo_geo_task = Task(
             description="Create SEO and GEO elements: SLUG, META, KEYWORDS, GEO_SNIPPETS",
@@ -580,7 +651,6 @@ def run_blog_creation_phase():
             agent=seo_geo_optimizer
         )
         
-        # STEP 6: CEO review
         print(f"\n[Step 4] CEO reviewing...")
         strategy_context = f"\nFOUNDER'S STRATEGY:\n- Goal: {strategy['goal']}\n- Audience: {strategy['target_audience']}\n" if strategy else ""
         
@@ -622,7 +692,6 @@ def run_blog_creation_phase():
             if attempt < MAX_REVISIONS:
                 print(f"Will research a NEW topic for next attempt...")
     
-    # Parse SEO output
     slug, meta, keywords = "", "", ""
     if final_seo_output:
         for line in final_seo_output.split('\n'):
@@ -636,7 +705,7 @@ def run_blog_creation_phase():
     print(f"Final Title: {final_title}")
     
     if is_approved and final_title and final_blog_content:
-        image_url = generate_blog_image(final_title, keywords, PAGE_NAME)
+        image_url = generate_blog_image_with_agent(final_title, final_blog_content, keywords, PAGE_NAME)
         page_id = create_notion_page_with_body(final_title, final_blog_content[:500], slug, meta, keywords, final_blog_content, image_url, PAGE_NAME)
         
         if page_id:
@@ -664,13 +733,13 @@ def run_social_promotion_phase():
         
         ig_caption = create_instagram_caption(blog['title'], blog['content'], blog['keywords'])
         fb_caption = create_facebook_caption(blog['title'], blog['content'], blog['keywords'])
-        image_url = generate_blog_image(blog['title'], blog['keywords'], PAGE_NAME)
+        image_url = generate_blog_image_with_agent(blog['title'], blog['content'], blog['keywords'], PAGE_NAME)
         
         ig_result = post_to_instagram(image_url, ig_caption)
         fb_result = post_to_facebook(image_url, fb_caption)
         
         log_data = f"Instagram: {'✅ Posted' if ig_result else '❌ Failed'}\nFacebook: {'✅ Posted' if fb_result else '❌ Failed'}"
-        log_to_notion(blog['title'], log_data the agents did.")
+        log_to_notion(blog['title'], log_data)
         update_social_status(blog['id'], "Posted")
         print(f"\n✅ Completed promotion for: {blog['title']}")
 
