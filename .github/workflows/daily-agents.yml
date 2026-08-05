@@ -12,7 +12,11 @@ on:
       page_niche:
         description: 'Page Niche'
         required: false
-        default: 'Parenting'
+        default: 'general'
+      page_description:
+        description: 'Page Description (specific focus)'
+        required: false
+        default: ''
       facebook_page_id:
         description: 'Facebook Page ID'
         required: false
@@ -53,5 +57,9 @@ jobs:
         FACEBOOK_PAGE_ID: ${{ github.event.inputs.facebook_page_id || secrets.FACEBOOK_PAGE_ID }}
         FACEBOOK_ACCESS_TOKEN: ${{ github.event.inputs.facebook_access_token || secrets.FACEBOOK_ACCESS_TOKEN }}
         INSTAGRAM_ACCOUNT_ID: ${{ github.event.inputs.instagram_account_id || secrets.INSTAGRAM_ACCOUNT_ID }}
+        PAGE_NAME: ${{ github.event.inputs.page_name || 'Kahani AI' }}
+        PAGE_NICHE: ${{ github.event.inputs.page_niche || 'general' }}
+        PAGE_DESCRIPTION: ${{ github.event.inputs.page_description || '' }}
+        
       run: |
         python agents.py
