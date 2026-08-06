@@ -36,7 +36,7 @@ STRATEGY_DB_ID = os.getenv("STRATEGY_DB_ID")
 MEMORY_DB_ID = os.getenv("MEMORY_DB_ID")
 PAGE_NAME = os.getenv("PAGE_NAME", "Kahani AI")
 PAGE_NICHE = os.getenv("PAGE_NICHE", "general")
-PAGE_DESCRIPTION = os.getenv("PAGE_DESCRIPTION", "")  # NEW: For sub-niche differentiation
+PAGE_DESCRIPTION = os.getenv("PAGE_DESCRIPTION", "")
 
 os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
 
@@ -49,16 +49,22 @@ Tone: Warm, empathetic, understanding, like a trusted friend who's been there.
 Audience: Parents of children ages 0-12, educators, families.
 """,
     "technology": """
-Focus on: tech tutorials, gadget reviews, software tips, productivity tools, 
-digital literacy, troubleshooting, emerging tech trends.
+Focus on: tech tutorials, software tools, productivity, digital optimization, 
+technical guides, best practices, emerging trends.
 Tone: Clear, practical, jargon-free but not dumbed down, helpful.
-Audience: Tech enthusiasts, professionals, beginners wanting to learn.
+Audience: Tech enthusiasts, professionals, developers, digital marketers.
 """,
     "tech": """
-Focus on: tech tutorials, gadget reviews, software tips, productivity tools, 
-digital literacy, troubleshooting, emerging tech trends.
+Focus on: tech tutorials, software tools, productivity, digital optimization, 
+technical guides, best practices, emerging trends.
 Tone: Clear, practical, jargon-free but not dumbed down, helpful.
-Audience: Tech enthusiasts, professionals, beginners wanting to learn.
+Audience: Tech enthusiasts, professionals, developers, digital marketers.
+""",
+    "seo": """
+Focus on: SEO best practices, GEO optimization, AI search engine optimization, 
+content structure, schema markup, technical SEO, featured snippets.
+Tone: Professional, technical but accessible, data-driven, actionable.
+Audience: Content creators, digital marketers, SEO professionals, bloggers.
 """,
     "fitness": """
 Focus on: workout routines, nutrition tips, mental health, wellness practices, 
@@ -97,11 +103,9 @@ Audience: General audience seeking valuable content.
 """
 }
 
-# Get niche-specific guidance (fallback to general if niche not in dictionary)
 niche_lower = PAGE_NICHE.lower()
 NICHE_CONTEXT = NICHE_GUIDANCE.get(niche_lower, NICHE_GUIDANCE["general"])
 
-# Build comprehensive brand context with description for sub-niche differentiation
 BRAND_CONTEXT = f"""
 {PAGE_NAME} creates valuable content in the {PAGE_NICHE} niche.
 
@@ -169,11 +173,21 @@ def notion_headers():
 
 # ============ STRATEGY & MEMORY DATABASE FUNCTIONS ============
 def fetch_active_strategy():
+    """Fetch the active strategy specifically for the current PAGE."""
     if not STRATEGY_DB_ID:
         return None
     
     url = f"https://api.notion.com/v1/databases/{STRATEGY_DB_ID}/query"
-    payload = {"filter": {"property": "Status", "select": {"equals": "Active"}}}
+    
+    payload = {
+        "filter": {
+            "and": [
+                {"property": "Status", "select": {"equals": "Active"}},
+                {"property": "Page", "select": {"equals": PAGE_NAME}}
+            ]
+        }
+    }
+    
     response = requests.post(url, headers=notion_headers(), json=payload)
     
     if response.status_code == 200:
@@ -186,6 +200,8 @@ def fetch_active_strategy():
                 "current_priority": strategy.get("Current Priority", {}).get("select", {}).get("name", ""),
                 "brand_rules": strategy.get("Brand Rules", {}).get("rich_text", [{}])[0].get("text", {}).get("content", "")
             }
+    
+    print(f"⚠️ No active strategy found for {PAGE_NAME}. Using defaults.")
     return None
 
 def fetch_relevant_memories(memory_type=None, outcome=None, limit=10):
@@ -285,41 +301,33 @@ CRITICAL: Keep it SHORT (under 200 chars) and specify REALISTIC PHOTOGRAPHY.""",
         
         print(f"Agent output: {image_output[:200]}")
         
-        # Extract the image prompt
         image_prompt = ""
         for line in image_output.split('\n'):
             if "IMAGE_PROMPT:" in line:
                 image_prompt = line.split("IMAGE_PROMPT:")[-1].strip()
                 break
         
-        # If extraction failed, use the entire output
         if not image_prompt:
             image_prompt = image_output[:200]
         
-        # If still empty, use a fallback
         if not image_prompt or len(image_prompt) < 10:
             print("⚠️ Agent output empty, using fallback prompt")
             image_prompt = f"professional photography, {title}, realistic, high quality"
         
-        # Ensure prompt is short enough for URL
         image_prompt = image_prompt[:200]
         
         print(f"✅ Image prompt: {image_prompt}")
         
-        # Generate URL with proper encoding
         seed = hash(title + page_name) % 10000
         encoded_prompt = requests.utils.quote(image_prompt)
         
-        # Build URL
         image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
         
-        # Final safety check - if URL too long, use ultra-short fallback
         if len(image_url) > 1900:
             print("⚠️ URL too long, using minimal fallback")
             short_title = title[:30]
             image_url = f"https://image.pollinations.ai/prompt/{requests.utils.quote(short_title)}?width=1200&height=675&model=flux&nologo=true&seed={seed}"
         
-        # Ensure we never return None
         if not image_url:
             print("❌ CRITICAL: image_url is None, using emergency fallback")
             image_url = "https://image.pollinations.ai/prompt/professional%20photography?width=1200&height=675&model=flux&nologo=true&seed=1234"
@@ -329,7 +337,6 @@ CRITICAL: Keep it SHORT (under 200 chars) and specify REALISTIC PHOTOGRAPHY.""",
         
     except Exception as e:
         print(f"❌ Error in image generation: {e}")
-        # Emergency fallback
         seed = hash(title + page_name) % 10000
         fallback_url = f"https://image.pollinations.ai/prompt/professional%20photography?width=1200&height=675&model=flux&nologo=true&seed={seed}"
         print(f"⚠️ Using emergency fallback URL: {fallback_url}")
@@ -546,29 +553,29 @@ def post_to_facebook(image_url, caption):
         return response.json().get("id")
     return None
 
-# ============ DEFINE THE AUTONOMOUS AGENTS ============
+# ============ DEFINE THE AUTONOMOUS AGENTS (ALL DYNAMIC - NO HARDCODED REFERENCES) ============
 FREE_MODEL = "mistral/mistral-small-latest"
 
 trend_researcher = Agent(
-    role=f"Senior Content Strategist for {PAGE_NICHE} Niche",
-    goal=f"Identify UNIQUE, HIGH-VALUE blog topics in the {PAGE_NICHE} niche that solve real problems",
+    role=f"Senior Content Strategist for {PAGE_NAME}",
+    goal=f"Identify UNIQUE, HIGH-VALUE blog topics in the {PAGE_NICHE} niche that solve real problems for {PAGE_NAME}'s audience",
     backstory=f"""You are a veteran content strategist specializing in the {PAGE_NICHE} niche.
     {BRAND_CONTEXT}
     You find CONTENT GAPS where people are searching but finding poor answers.
-    You output topics that are specific to {PAGE_NICHE} and relevant to {PAGE_NAME}'s specific focus.
-    Topics must be timely, valuable, and defensible.""",
+    You output topics that are specific to {PAGE_NICHE} and directly relevant to {PAGE_NAME}'s purpose.
+    Topics must be timely, valuable, and defensible. Never suggest generic topics.""",
     llm=FREE_MODEL,
     verbose=True
 )
 
 blog_writer = Agent(
-    role=f"Expert Blog Writer for {PAGE_NAME} ({PAGE_NICHE} Content)",
-    goal=f"Write {PAGE_NICHE} blog posts that feel like they were written by a trusted expert in the field",
-    backstory=f"""You are a master storyteller and {PAGE_NICHE} expert.
+    role=f"Expert Blog Writer for {PAGE_NAME}",
+    goal=f"Write {PAGE_NICHE} blog posts that feel like they were written by a trusted expert and naturally relate to {PAGE_NAME}",
+    backstory=f"""You are a master storyteller and {PAGE_NICHE} expert writing specifically for {PAGE_NAME}.
     {BRAND_CONTEXT}
     {HUMANIZATION_RULES}
     You write specifically for the {PAGE_NICHE} audience with their unique needs and interests.
-    All content should naturally relate to {PAGE_NAME} and its specific purpose.
+    All content should naturally relate to {PAGE_NAME} and its specific purpose where appropriate.
     Structure: Hook, Problem/Context, Solution/Insight, Examples, Common Mistakes, Step-by-Step Guide, FAQ, Conclusion.
     Aim for 1,500-2,000 words. Write for HUMANS first, search engines second.""",
     llm=FREE_MODEL,
@@ -576,9 +583,10 @@ blog_writer = Agent(
 )
 
 seo_geo_optimizer = Agent(
-    role="SEO & GEO Specialist",
-    goal="Optimize content to rank #1 on Google AND appear in AI-generated answers",
-    backstory="""You are an SEO expert adapted to the AI search era. You optimize for both human readers and machine understanding.
+    role=f"SEO & GEO Specialist for {PAGE_NAME}",
+    goal=f"Optimize {PAGE_NICHE} content to rank #1 on Google AND appear in AI-generated answers",
+    backstory=f"""You are an SEO expert adapted to the AI search era, optimizing content for {PAGE_NAME}.
+    You optimize for both human readers and machine understanding.
     Output EXACT format:
     SLUG: [url-friendly-slug]
     META: [compelling meta description with keyword and CTA, under 155 chars]
@@ -589,13 +597,13 @@ seo_geo_optimizer = Agent(
 )
 
 ceo_reviewer = Agent(
-    role=f"Chief Content Officer for {PAGE_NAME} ({PAGE_NICHE} Niche)",
-    goal=f"Ensure every {PAGE_NICHE} blog post meets the highest standards of quality and niche relevance",
-    backstory=f"""You are the final quality gate for {PAGE_NICHE} content.
+    role=f"Chief Content Officer for {PAGE_NAME}",
+    goal=f"Ensure every {PAGE_NICHE} blog post meets the highest standards of quality, niche relevance, and {PAGE_NAME} alignment",
+    backstory=f"""You are the final quality gate for {PAGE_NAME}'s {PAGE_NICHE} content.
     {BRAND_CONTEXT}
     
-    You evaluate content specifically for the {PAGE_NICHE} audience and their expectations.
-    Content must be relevant to {PAGE_NAME}'s specific focus and purpose.
+    You evaluate content specifically for the {PAGE_NICHE} audience and {PAGE_NAME}'s goals.
+    Content MUST be relevant to {PAGE_NAME}'s specific focus and purpose.
     
     REVIEW CRITERIA:
     1. HUMANIZATION (40%): Real person voice, no AI clichés, specific examples.
@@ -616,9 +624,9 @@ ceo_reviewer = Agent(
 )
 
 image_prompt_creator = Agent(
-    role="Visual Content Director & Image Prompt Engineer",
-    goal="Analyze blog content and create detailed, contextual image prompts for professional, realistic photographs",
-    backstory="""You are a visual storytelling expert who understands what makes images perform well on blogs and social media.
+    role=f"Visual Content Director for {PAGE_NAME}",
+    goal=f"Analyze {PAGE_NICHE} blog content and create contextual image prompts for professional, realistic photographs",
+    backstory=f"""You are a visual storytelling expert creating images for {PAGE_NAME}'s {PAGE_NICHE} content.
     
 YOUR EXPERTISE:
 - You can read a blog post and instantly identify the CORE EMOTION and KEY SCENE
@@ -652,25 +660,26 @@ You create images that stop the scroll and build emotional connection.""",
 )
 
 social_strategist = Agent(
-    role="Social Media Strategist",
-    goal="Decide which platforms to use and what angle for each",
-    backstory="You are a social media strategist who has grown brands to millions of followers. You pick the best platforms and angles.",
+    role=f"Social Media Strategist for {PAGE_NAME}",
+    goal=f"Decide which platforms to use and what angle for each {PAGE_NICHE} post",
+    backstory=f"""You are a social media strategist who has grown brands to millions of followers.
+    You pick the best platforms and angles for {PAGE_NAME}'s {PAGE_NICHE} content.""",
     llm=FREE_MODEL,
     verbose=True
 )
 
 content_creator = Agent(
-    role="Viral Social Content Creator",
-    goal="Create scroll-stopping social media posts for each platform",
-    backstory="You create viral content. You write posts that make people stop scrolling, feel emotional, and want to engage.",
+    role=f"Viral Social Content Creator for {PAGE_NAME}",
+    goal=f"Create scroll-stopping social media posts for {PAGE_NAME}'s {PAGE_NICHE} content",
+    backstory=f"""You create viral content for {PAGE_NAME}. You write posts that make people stop scrolling, feel emotional, and want to engage.""",
     llm=FREE_MODEL,
     verbose=True
 )
 
 poster = Agent(
-    role="Social Media Manager",
-    goal="Format the final approved content for publishing across platforms",
-    backstory="You are the final step. You take approved content and format it perfectly for each social platform.",
+    role=f"Social Media Manager for {PAGE_NAME}",
+    goal=f"Format the final approved {PAGE_NICHE} content for publishing across platforms",
+    backstory=f"""You are the final step. You take approved content and format it perfectly for each social platform.""",
     llm=FREE_MODEL,
     verbose=True
 )
@@ -682,6 +691,11 @@ def run_blog_creation_phase():
     print("="*60)
     
     strategy = fetch_active_strategy()
+    if strategy:
+        print(f"\nActive Strategy: {strategy['goal']}")
+        print(f"Target Audience: {strategy['target_audience']}")
+        print(f"Priority: {strategy['current_priority']}")
+    
     failure_memories = fetch_relevant_memories(outcome="Failure", limit=5)
     success_memories = fetch_relevant_memories(outcome="Success", limit=5)
     
@@ -706,8 +720,8 @@ def run_blog_creation_phase():
             )
         else:
             research_description = (
-                f"Research ONE trending, high-value blog topic in the {PAGE_NICHE} niche perfect for our audience. "
-                f"The topic must be relevant to {PAGE_NAME}'s specific focus. "
+                f"Research ONE trending, high-value blog topic in the {PAGE_NICHE} niche perfect for {PAGE_NAME}'s audience. "
+                f"The topic must be relevant to {PAGE_NAME}'s specific focus: {PAGE_DESCRIPTION if PAGE_DESCRIPTION else PAGE_NICHE}. "
                 "Output ONLY the blog topic/title as plain text, no quotes, no markdown."
             )
         
@@ -747,7 +761,15 @@ def run_blog_creation_phase():
         )
         
         print(f"\n[Step 4] CEO reviewing for {PAGE_NICHE} relevance...")
-        strategy_context = f"\nFOUNDER'S STRATEGY:\n- Goal: {strategy['goal']}\n- Audience: {strategy['target_audience']}\n" if strategy else ""
+        strategy_context = ""
+        if strategy:
+            strategy_context = (
+                f"\nFOUNDER'S STRATEGY for {PAGE_NAME}:\n"
+                f"- Goal: {strategy['goal']}\n"
+                f"- Audience: {strategy['target_audience']}\n"
+                f"- Current Priority: {strategy['current_priority']}\n"
+                f"- Brand Rules: {strategy['brand_rules']}\n"
+            )
         
         review_description = (
             f"Review the blog post rigorously for {PAGE_NICHE} niche relevance and {PAGE_NAME} alignment.\n"
