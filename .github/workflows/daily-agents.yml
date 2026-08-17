@@ -6,15 +6,15 @@ on:
   workflow_dispatch:
     inputs:
       page_name:
-        description: 'Page Name'
+        description: 'Page Name (leave empty for all pages)'
         required: false
-        default: 'Kahani AI'
+        default: ''
       page_niche:
         description: 'Page Niche'
         required: false
-        default: 'general'
+        default: ''
       page_description:
-        description: 'Page Description (specific focus)'
+        description: 'Page Description'
         required: false
         default: ''
       facebook_page_id:
@@ -53,13 +53,27 @@ jobs:
         STRATEGY_DB_ID: ${{ secrets.STRATEGY_DB_ID }}
         MEMORY_DB_ID: ${{ secrets.MEMORY_DB_ID }}
         DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        # Use workflow inputs if provided, otherwise use secrets
         FACEBOOK_PAGE_ID: ${{ github.event.inputs.facebook_page_id || secrets.FACEBOOK_PAGE_ID }}
         FACEBOOK_ACCESS_TOKEN: ${{ github.event.inputs.facebook_access_token || secrets.FACEBOOK_ACCESS_TOKEN }}
         INSTAGRAM_ACCOUNT_ID: ${{ github.event.inputs.instagram_account_id || secrets.INSTAGRAM_ACCOUNT_ID }}
-        PAGE_NAME: ${{ github.event.inputs.page_name || 'Kahani AI' }}
-        PAGE_NICHE: ${{ github.event.inputs.page_niche || 'general' }}
+        PAGE_NAME: ${{ github.event.inputs.page_name || '' }}
+        PAGE_NICHE: ${{ github.event.inputs.page_niche || '' }}
         PAGE_DESCRIPTION: ${{ github.event.inputs.page_description || '' }}
-        
       run: |
-        python agents.py
+        echo "=========================================="
+        echo "WORKFLOW TRIGGERED"
+        echo "=========================================="
+        echo "PAGE_NAME: $PAGE_NAME"
+        echo "PAGE_NICHE: $PAGE_NICHE"
+        echo "PAGE_DESCRIPTION: $PAGE_DESCRIPTION"
+        echo "=========================================="
+        
+        if [ -n "$PAGE_NAME" ]; then
+          echo "🎯 Manual trigger for specific page: $PAGE_NAME"
+          python agents.py
+        else
+          echo "🔄 Scheduled run: dispatching to all active pages"
+          python run_all_pages.py
+        fi
+        
+        echo "✅ Workflow complete"
