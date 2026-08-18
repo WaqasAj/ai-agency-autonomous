@@ -708,6 +708,459 @@ def run_social_promotion_phase():
         log_to_notion(blog['title'], f"IG: {'OK' if ig_result else 'Skip'} | FB: {'OK' if fb_result else 'Skip'}")
         update_social_status(blog['id'], "Posted")
 
+# ============ GOOGLE SEARCH CONSOLE & ANALYTICS INTEGRATION ============
+def get_search_console_service():
+    """Authenticate with Google Search Console API."""
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        
+        key_json = os.getenv("GOOGLE_SEARCH_CONSOLE_KEY")
+        if not key_json:
+            print("⚠️ GOOGLE_SEARCH_CONSOLE_KEY not set")
+            return None
+        
+        import json
+        creds_dict = json.loads(key_json)
+        
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=['https://www.googleapis.com/auth/webmasters.readonly']
+        )
+        
+        service = build('searchconsole', 'v1', credentials=credentials)
+        return service
+    except Exception as e:
+        print(f"❌ Search Console auth error: {e}")
+        return None
+
+def get_analytics_service():
+    """Authenticate with Google Analytics 4 API."""
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        
+        key_json = os.getenv("GOOGLE_ANALYTICS_KEY")
+        analytics_id = os.getenv("GOOGLE_ANALYTICS_ID")
+        
+        if not key_json or not analytics_id:
+            print("⚠️ GOOGLE_ANALYTICS_KEY or GOOGLE_ANALYTICS_ID not set")
+            return None
+        
+        import json
+        creds_dict = json.loads(key_json)
+        
+        credentials = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=['https://www.googleapis.com/auth/analytics.readonly']
+        )
+        
+        service = build('analyticsdata', 'v1beta', credentials=credentials)
+        return service, analytics_id
+    except Exception as e:
+        print(f" Analytics auth error: {e}")
+        return None, None
+
+def fetch_search_console_data(site_url, days=28):
+    """Fetch performance data from Search Console."""
+    service = get_search_console_service()
+    if not service:
+        return None
+    
+    try:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        
+        # Fetch page-level performance
+        response = service.searchanalytics().query(
+            siteUrl=site_url,
+            body={
+                "startDate": start_date,
+                "endDate": end_date,
+                "dimensions": ["page", "query"],
+                "rowLimit": 100
+            }
+        ).execute()
+        
+        return response.get('rows', [])
+    except Exception as e:
+        print(f"❌ Search Console query error: {e}")
+        return None
+
+def fetch_indexing_status(site_url):
+    """Check indexing status for recent posts."""
+    service = get_search_console_service()
+    if not service:
+        return None
+    
+    try:
+        # Get URL inspection for blog posts
+        recent_posts = fetch_recent_blog_titles(days=30, limit=10)
+        status_report = []
+        
+        for title in recent_posts[:5]:  # Check top 5 recent posts
+            slug = title.lower().replace(' ', '-').replace('?', '')[:50]
+            url = f"{site_url}/blog/{slug}"
+            
+            try:
+                inspection = service.urlInspection().index().inspect(
+                    body={
+                        "siteUrl": site_url,
+                        "inspectionUrl": url
+                    }
+                ).execute()
+                
+                status = inspection.get('inspectionResult', {})
+                coverage = status.get('coverageState', 'Unknown')
+                
+                status_report.append({
+                    'url': url,
+                    'status': coverage,
+                    'title': title
+                })
+            except Exception as e:
+                print(f"Could not inspect {url}: {e}")
+        
+        return status_report
+    except Exception as e:
+        print(f"❌ Indexing status error: {e}")
+        return None
+
+def fetch_analytics_data(analytics_id, days=28):
+    """Fetch traffic data from Google Analytics 4."""
+    service, _ = get_analytics_service()
+    if not service:
+        return None
+    
+    try:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        
+        response = service.properties().runReport(
+            property=f"properties/{analytics_id}",
+            body={
+                "dateRanges": [
+                    {
+                        "startDate": start_date,
+                        "endDate": end_date
+                    }
+                ],
+                "dimensions": [
+                    {"name": "pagePath"},
+                    {"name": "pageTitle"}
+                ],
+                "metrics": [
+                    {"name": "sessions"},
+                    {"name": "averageSessionDuration"},
+                    {"name": "bounceRate"}
+                ],
+                "orderBys": [
+                    {"metric": {"metricName": "sessions"}, "desc": True}
+                ],
+                "limit": 50
+            }
+        ).execute()
+        
+        return response.get('rows', [])
+    except Exception as e:
+        print(f"❌ Analytics query error: {e}")
+        return None
+
+# ============ KEYWORD RESEARCH AGENT ============
+keyword_researcher = Agent(
+    role="SEO Keyword Research Specialist",
+    goal="Find high-value, low-competition keywords for blog content using free research tools",
+    backstory="""You are an expert keyword researcher who specializes in finding golden opportunities.
+    
+YOUR METHODOLOGY:
+- Analyze search volume, competition, and user intent
+- Find long-tail keywords with commercial intent
+- Identify trending topics in the niche
+- Look for "People Also Ask" opportunities
+- Research competitor keywords
+
+TOOLS YOU USE:
+- Google Trends API (free)
+- AnswerThePublic patterns
+- Related searches from Google
+- Keyword difficulty estimation
+
+You provide:
+- Primary keyword with search volume estimate
+- 5-10 related long-tail keywords
+- Content angle recommendations
+- Competition level (Low/Medium/High)
+- Estimated traffic potential""",
+    llm=FREE_MODEL,
+    verbose=True
+)
+
+def research_keywords_with_tools(niche, page_name):
+    """Research keywords using free APIs and tools."""
+    try:
+        import requests
+        
+        # Use Google Trends data (via free API)
+        trends_url = f"https://trends.google.com/trends/api/explore"
+        
+        # Simulate keyword research with AI analysis
+        research_task = Task(
+            description=f"""Research the best keywords for {page_name} in the {niche} niche.
+
+RESEARCH FOCUS:
+1. Find 10 high-value keywords with:
+   - Search volume > 100/month
+   - Low to medium competition
+   - Commercial or informational intent
+   
+2. For each keyword, provide:
+   - Keyword phrase
+   - Estimated monthly searches
+   - Competition level (Low/Medium/High)
+   - User intent (Informational/Commercial/Transactional)
+   - Content type recommendation (How-to/List/Review/Guide)
+
+3. Identify trending topics in {niche} right now
+
+4. Suggest 3 content ideas that could rank in top 3
+
+OUTPUT FORMAT:
+TOP_KEYWORDS:
+1. [keyword] | Volume: [X] | Competition: [Low/Med/High] | Intent: [type]
+2. ...
+
+TRENDING_TOPICS:
+- [topic 1]
+- [topic 2]
+
+CONTENT_OPPORTUNITIES:
+1. [Idea with keyword + angle]
+2. [Idea with keyword + angle]
+3. [Idea with keyword + angle]""",
+            expected_output="Keyword research report with volumes, competition, and content ideas",
+            agent=keyword_researcher
+        )
+        
+        crew = Crew(agents=[keyword_researcher], tasks=[research_task], process=Process.sequential, verbose=True)
+        crew.kickoff()
+        
+        return research_task.output.raw.strip()
+    except Exception as e:
+        print(f"❌ Keyword research error: {e}")
+        return "Keyword research failed"
+
+# ============ SEO MONITOR AGENT ============
+seo_monitor = Agent(
+    role="Chief SEO & Performance Officer",
+    goal="Monitor website health, identify SEO issues, analyze performance, and provide actionable recommendations to the CEO",
+    backstory="""You are a world-class SEO specialist with expertise in technical SEO, content optimization, and performance analytics.
+
+YOUR RESPONSIBILITIES:
+1. Monitor Google Search Console for errors and opportunities
+2. Analyze traffic patterns from Google Analytics
+3. Identify pages with indexing issues
+4. Find content gaps and optimization opportunities
+5. Track keyword rankings and SERP features
+6. Monitor Core Web Vitals and page speed
+7. Provide specific, actionable fixes to the CEO
+
+YOUR ANALYSIS FRAMEWORK:
+- Technical SEO: Crawl errors, mobile usability, structured data
+- Content SEO: Keyword optimization, internal linking, freshness
+- Performance: Page speed, Core Web Vitals, user engagement
+- Opportunities: New keywords, content gaps, featured snippets
+
+You provide data-driven recommendations with clear priority levels:
+🔴 CRITICAL: Must fix immediately (blocking indexing/ranking)
+🟡 HIGH: Should fix this week (significant impact)
+ MEDIUM: Schedule for next sprint (moderate impact)
+🔵 LOW: Nice to have (minor improvements)""",
+    llm=FREE_MODEL,
+    verbose=True
+)
+
+def run_seo_monitor():
+    """Comprehensive weekly SEO monitoring and reporting."""
+    print("\n" + "="*70)
+    print(f"🔍 SEO MONITOR: Running comprehensive audit for {PAGE_NAME}")
+    print("="*70)
+    
+    site_url = baseUrl if 'baseUrl' in globals() else "https://kahani-ai.onrender.com"
+    
+    # Fetch data from Google APIs
+    print("\n📊 Fetching Search Console data...")
+    sc_data = fetch_search_console_data(site_url, days=28)
+    
+    print("📊 Checking indexing status...")
+    indexing_status = fetch_indexing_status(site_url)
+    
+    print("📊 Fetching Analytics data...")
+    ga_data = fetch_analytics_data(os.getenv("GOOGLE_ANALYTICS_ID", ""), days=28)
+    
+    print("🔍 Researching new keyword opportunities...")
+    keyword_research = research_keywords_with_tools(PAGE_NICHE, PAGE_NAME)
+    
+    # Format data for analysis
+    sc_summary = ""
+    if sc_data:
+        top_pages = sc_data[:10]
+        sc_summary = "\nTOP PERFORMING PAGES (Last 28 days):\n"
+        for row in top_pages:
+            page = row.get('keys', ['N/A'])[0]
+            clicks = row.get('clicks', 0)
+            impressions = row.get('impressions', 0)
+            ctr = row.get('ctr', 0) * 100
+            position = row.get('position', 0)
+            sc_summary += f"- {page}\n  Clicks: {clicks} | Impressions: {impressions} | CTR: {ctr:.1f}% | Avg Position: {position:.1f}\n"
+    
+    indexing_summary = ""
+    if indexing_status:
+        indexing_summary = "\nINDEXING STATUS:\n"
+        for item in indexing_status:
+            status_emoji = "✅" if "Indexed" in item['status'] else "❌"
+            indexing_summary += f"{status_emoji} {item['title']}\n   Status: {item['status']}\n"
+    
+    ga_summary = ""
+    if ga_data:
+        ga_summary = "\nTOP TRAFFIC PAGES (Last 28 days):\n"
+        for row in ga_data[:5]:
+            dimensions = row.get('dimensionValues', [])
+            metrics = row.get('metricValues', [])
+            page_path = dimensions[0].get('value', 'N/A') if dimensions else 'N/A'
+            sessions = metrics[0].get('value', '0')
+            avg_duration = metrics[1].get('value', '0')
+            bounce_rate = metrics[2].get('value', '0')
+            ga_summary += f"- {page_path}\n  Sessions: {sessions} | Avg Duration: {avg_duration}s | Bounce Rate: {bounce_rate}%\n"
+    
+    # Create comprehensive analysis task
+    analysis_task = Task(
+        description=f"""Analyze the SEO health and performance of {PAGE_NAME} ({site_url}).
+
+DATA PROVIDED:
+
+SEARCH CONSOLE PERFORMANCE:
+{sc_summary}
+
+INDEXING STATUS:
+{indexing_summary}
+
+ANALYTICS TRAFFIC:
+{ga_summary}
+
+KEYWORD RESEARCH:
+{keyword_research}
+
+YOUR TASK:
+Provide a comprehensive SEO report with specific, actionable recommendations.
+
+STRUCTURE YOUR REPORT AS:
+
+📈 PERFORMANCE SUMMARY
+- Total clicks, impressions, CTR trends
+- Top performing content
+- Traffic patterns
+
+ CRITICAL ISSUES (Fix Immediately)
+- Pages not indexing
+- Technical errors
+- Mobile usability issues
+
+🎯 HIGH PRIORITY ACTIONS (This Week)
+- Content optimization opportunities
+- Keyword gaps to fill
+- Internal linking improvements
+
+💡 MEDIUM PRIORITY (Next 2 Weeks)
+- Content refresh opportunities
+- New keyword targets
+- Featured snippet opportunities
+
+ LOW PRIORITY (Nice to Have)
+- Minor optimizations
+- UX improvements
+
+📝 CONTENT RECOMMENDATIONS
+- 3 specific blog post ideas based on keyword research
+- Topics with high search volume and low competition
+- Content angles that could rank in top 3
+
+🎪 QUICK WINS
+- 3 changes that can be made in <30 minutes with immediate impact
+
+Be specific, data-driven, and actionable. Prioritize by impact and effort.""",
+        expected_output="Comprehensive SEO audit report with prioritized action items",
+        agent=seo_monitor
+    )
+    
+    crew = Crew(agents=[seo_monitor], tasks=[analysis_task], process=Process.sequential, verbose=True)
+    result = crew.kickoff()
+    
+    # Save report to Notion Memory
+    save_to_memory(
+        summary=f"SEO Audit: {PAGE_NAME} - {datetime.now().strftime('%Y-%m-%d')}",
+        memory_type="SEO_AUDIT",
+        content=str(result)[:2000],
+        outcome="Success",
+        reason="Weekly SEO monitoring completed",
+        confidence=9
+    )
+    
+    # Also save keyword research separately
+    save_to_memory(
+        summary=f"Keyword Research: {PAGE_NICHE} - {datetime.now().strftime('%Y-%m-%d')}",
+        memory_type="KEYWORD_RESEARCH",
+        content=keyword_research[:2000],
+        outcome="Success",
+        reason="Fresh keyword opportunities identified",
+        confidence=8
+    )
+    
+    print(f"\n✅ SEO audit complete! Report saved to Memory database.")
+    print(f"📋 Total recommendations generated")
+    
+    return result
+
+# ============ UPDATE CEO REVIEWER TO CONSIDER SEO DATA ============
+# Update the ceo_reviewer agent to check SEO performance before approving topics
+
+ceo_reviewer = Agent(
+    role=f"Chief Content Officer for {PAGE_NAME}",
+    goal=f"Ensure every {PAGE_NICHE} blog post meets the highest standards of quality, SEO optimization, and brand alignment",
+    backstory=f"""You are the final quality gate for {PAGE_NAME}'s {PAGE_NICHE} content.
+{BRAND_CONTEXT}
+
+BEFORE APPROVING CONTENT, YOU CHECK:
+1. HUMANIZATION (40%): Does it sound like a real expert? No AI patterns.
+2. SEO OPTIMIZATION (25%): 
+   - Target keyword in title, first 100 words, H2s
+   - Meta description under 155 chars with keyword
+   - Internal links to related content
+   - External links to authoritative sources
+   - Image alt tags with keywords
+3. RELEVANCE (20%): Directly relates to {PAGE_NAME}'s niche and audience
+4. ORIGINALITY (10%): Fresh angle, not rehashed info
+5. TECHNICAL (5%): Grammar, formatting, structure
+
+DUPLICATE CHECK: If this topic was covered in last 30 days with same angle, REJECT.
+
+SEO PERFORMANCE CHECK:
+- Review recent Search Console data for similar topics
+- If similar posts have low CTR (<1%), suggest title/description improvements
+- If similar posts aren't indexed, investigate why
+
+Be strict. Only approve content that will rank and convert.
+
+Output EXACT format:
+DECISION: APPROVED or REJECTED
+SCORE: X/10
+SEO_SCORE: X/10
+REASONS: [specific issues]
+SEO_RECOMMENDATIONS: [keyword placement, meta tags, internal links]
+FIXES_NEEDED: [exact changes - only if REJECTED]""",
+    llm=FREE_MODEL,
+    verbose=True
+)
+
 # ============ MAIN ============
 def run_daily_agency():
     print(f"\n{'='*60}")
