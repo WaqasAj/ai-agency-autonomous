@@ -1271,7 +1271,7 @@ def run_daily_agency():
         print(f"⚠️ Social error: {e}")
     
     # Run SEO monitor on Sundays
-    if True
+    if True:
         try:
             print("\n🔍 Running weekly SEO audit...")
             run_seo_monitor()
