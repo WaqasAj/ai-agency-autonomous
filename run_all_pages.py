@@ -1,46 +1,3 @@
-"""
-Multi-Page Dispatcher with Full Output Capture
-"""
-import os
-import subprocess
-import sys
-
-# Try to import psycopg2. If it fails, we'll use the hardcoded fallback.
-try:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-    HAS_PSYCOPG2 = True
-except ImportError:
-    HAS_PSYCOPG2 = False
-    print("⚠️ psycopg2 not installed. Using hardcoded active pages.")
-
-def get_active_pages():
-    print("\n🔍 DEBUG: Checking DATABASE_URL...")
-    db_url = os.getenv("DATABASE_URL")
-    print(f"🔍 DEBUG: DATABASE_URL is present: {bool(db_url)}")
-    
-    if HAS_PSYCOPG2 and db_url:
-        try:
-            print("🔍 DEBUG: Connecting to database...")
-            conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
-            cur = conn.cursor()
-            cur.execute("SELECT name, niche, description, status FROM pages WHERE LOWER(status) = 'active'")
-            pages = cur.fetchall()
-            conn.close()
-            print(f"✅ Found {len(pages)} active pages in database.")
-            for p in pages:
-                print(f"   - {p['name']} (niche: {p['niche']})")
-            if pages:
-                return pages
-        except Exception as e:
-            print(f"❌ Database query failed: {e}")
-    
-    print("⚠️ Falling back to hardcoded active pages.")
-    return [
-        {"name": "Kahani AI", "niche": "parenting", "description": "AI bedtime stories for kids"},
-        {"name": "Geo Analyzer", "niche": "technology", "description": "SEO and GEO optimization tool"}
-    ]
-
 def run_agency_for_page(page):
     page_name = page["name"]
     page_niche = page.get("niche", "general")
@@ -60,7 +17,7 @@ def run_agency_for_page(page):
     print(f"🔍 DEBUG: Env vars set -> PAGE_NAME={page_name}, PAGE_NICHE={page_niche}")
     print(f"🔍 DEBUG: Starting agents.py subprocess...\n")
     
-    # Run agents.py and capture ALL output in real-time
+    # Run agents.py and capture ALL output
     process = subprocess.Popen(
         [sys.executable, "agents.py"],
         env=env,
@@ -72,28 +29,23 @@ def run_agency_for_page(page):
     )
     
     # Stream output line by line
+    output_lines = []
     if process.stdout:
         for line in process.stdout:
             print(line, end='', flush=True)
+            output_lines.append(line)
     
     process.wait()
     
+    # Check for errors
     if process.returncode != 0:
-        print(f"\n❌ Agency run failed for {page_name} (exit code: {process.returncode})")
+        print(f"\n❌ Agency run FAILED for {page_name}")
+        print(f"   Exit code: {process.returncode}")
+        print(f"   Last 10 lines of output:")
+        for line in output_lines[-10:]:
+            print(f"   {line}", end='')
     else:
         print(f"\n✅ Agency run completed for {page_name}")
-
-if __name__ == "__main__":
-    print("\n" + "="*70)
-    print("🔍 DISPATCHER STARTING")
-    print("="*70)
-    
-    pages = get_active_pages()
-    print(f"\n📋 Will run agency for {len(pages)} page(s)")
-    
-    for page in pages:
-        run_agency_for_page(page)
-    
-    print(f"\n{'='*70}")
-    print(f"🎉 DISPATCHER: All {len(pages)} pages processed!")
-    print(f"{'='*70}\n")
+        if not output_lines:
+            print("   ⚠️ WARNING: No output was captured from agents.py")
+            print("   This suggests the script may have crashed on import.")
