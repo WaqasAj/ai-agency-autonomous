@@ -1164,21 +1164,25 @@ FIXES_NEEDED: [exact changes - only if REJECTED]""",
 # ============ MAIN ============
 def run_daily_agency():
     print(f"\n{'='*60}")
-    print(f"DEBUG: PAGE_NAME={PAGE_NAME} | NICHE={PAGE_NICHE}")
-    print(f"{'='*60}")
     print(f"🚀 Starting agency for {PAGE_NAME} ({PAGE_NICHE})")
-
+    print(f"{'='*60}")
+    
     try:
         run_blog_creation_phase()
     except Exception as e:
         print(f"⚠️ Blog error: {e}")
-
+    
     try:
         run_social_promotion_phase()
     except Exception as e:
-        print(f"⚠️ Social error: {e}")
-
+        print(f"️ Social error: {e}")
+    
+    # Run comprehensive SEO monitor on Sundays
+    if datetime.now().weekday() == 6:  # Sunday
+        try:
+            print("\n🔍 Running weekly SEO audit...")
+            run_seo_monitor()
+        except Exception as e:
+            print(f"⚠️ SEO monitor error: {e}")
+    
     print("\n🎉 Done!")
-
-if __name__ == "__main__":
-    run_daily_agency()
