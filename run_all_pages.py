@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import time
 
 print("\n" + "="*70)
 print("🔍 DISPATCHER STARTING")
@@ -14,7 +15,11 @@ pages = [
 
 print(f"\n📋 Will run agency for {len(pages)} page(s)")
 
-for page in pages:
+for i, page in enumerate(pages):
+    if i > 0:
+        print(f"\n⏳ Waiting 30 seconds before next page to avoid API rate limits...")
+        time.sleep(30)
+    
     page_name = page["name"]
     page_niche = page.get("niche", "general")
     page_description = page.get("description", "")
