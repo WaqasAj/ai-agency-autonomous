@@ -1,8 +1,9 @@
 """
-Multi-Page Dispatcher (Bulletproof Version)
+Multi-Page Dispatcher with Full Output Capture
 """
 import os
 import subprocess
+import sys
 
 # Try to import psycopg2. If it fails, we'll use the hardcoded fallback.
 try:
@@ -35,7 +36,6 @@ def get_active_pages():
             print(f"❌ Database query failed: {e}")
     
     print("⚠️ Falling back to hardcoded active pages.")
-    # HARDCODED FALLBACK: Add your pages here to guarantee they run!
     return [
         {"name": "Kahani AI", "niche": "parenting", "description": "AI bedtime stories for kids"},
         {"name": "Geo Analyzer", "niche": "technology", "description": "SEO and GEO optimization tool"}
@@ -50,7 +50,7 @@ def run_agency_for_page(page):
     print(f"🚀 DISPATCHER: Running agency for '{page_name}'")
     print(f"   Niche: {page_niche}")
     print(f"   Description: {page_description[:100] if page_description else 'None'}")
-    print(f"{'='*70}")
+    print(f"{'='*70}\n")
     
     env = os.environ.copy()
     env["PAGE_NAME"] = page_name
@@ -58,13 +58,30 @@ def run_agency_for_page(page):
     env["PAGE_DESCRIPTION"] = page_description
     
     print(f"🔍 DEBUG: Env vars set -> PAGE_NAME={page_name}, PAGE_NICHE={page_niche}")
+    print(f"🔍 DEBUG: Starting agents.py subprocess...\n")
     
-    result = subprocess.run(["python", "agents.py"], env=env, capture_output=False)
+    # Run agents.py and capture ALL output in real-time
+    process = subprocess.Popen(
+        [sys.executable, "agents.py"],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        universal_newlines=True
+    )
     
-    if result.returncode != 0:
-        print(f"❌ Agency run failed for {page_name}")
+    # Stream output line by line
+    if process.stdout:
+        for line in process.stdout:
+            print(line, end='', flush=True)
+    
+    process.wait()
+    
+    if process.returncode != 0:
+        print(f"\n❌ Agency run failed for {page_name} (exit code: {process.returncode})")
     else:
-        print(f"✅ Agency run completed for {page_name}")
+        print(f"\n✅ Agency run completed for {page_name}")
 
 if __name__ == "__main__":
     print("\n" + "="*70)
