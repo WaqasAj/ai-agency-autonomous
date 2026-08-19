@@ -148,8 +148,17 @@ ALWAYS DO THESE (human signals):
 # ============ CLEANING HELPERS ============
 def clean_title(title):
     if not title: return "Untitled"
+    # Remove markdown, quotes, asterisks
     cleaned = re.sub(r'^[\s\*"\']+', '', title)
-    return re.sub(r'[\s\*"\']+$', '', cleaned).strip()
+    cleaned = re.sub(r'[\s\*"\']+$', '', cleaned)
+    cleaned = cleaned.strip()
+    
+    # CRITICAL: Truncate to 150 chars max (well under Notion's 2000 limit)
+    if len(cleaned) > 150:
+        cleaned = cleaned[:147] + "..."
+        print(f"⚠️ Title was too long, truncated to: {cleaned}")
+    
+    return cleaned
 
 def clean_blog_content(content, title):
     if not content: return ""
@@ -279,6 +288,17 @@ def generate_blog_image_with_agent(title, blog_content, keywords, page_name=PAGE
 def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url, page_name=PAGE_NAME):
     url = "https://api.notion.com/v1/pages"
     clean_t = clean_title(title)
+    def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url, page_name=PAGE_NAME):
+    url = "https://api.notion.com/v1/pages"
+    clean_t = clean_title(title)
+    
+    # CRITICAL: Final safety check - ensure title is under 2000 chars
+    if len(clean_t) > 2000:
+        print(f"⚠️ Title still too long ({len(clean_t)} chars), truncating to 1997...")
+        clean_t = clean_t[:1997] + "..."
+    
+    clean_content = clean_blog_content(full_blog_content, clean_t)
+    # ... rest of the function remains the same
     clean_content = clean_blog_content(full_blog_content, clean_t)
     excerpt = clean_content[:500] if clean_content else ""
     payload = {
@@ -370,8 +390,33 @@ def post_to_facebook(image_url, caption):
 # ============ DEFINE AGENTS ============
 FREE_MODEL = "mistral/mistral-small-latest"
 
-trend_researcher = Agent(role=f"Senior Content Strategist for {PAGE_NAME}", goal=f"Identify UNIQUE, HIGH-VALUE blog topics that solve REAL problems for {PAGE_NAME}'s audience", backstory=f"You are a veteran content strategist with 15 years of experience in the {PAGE_NICHE} niche.\n\n{BRAND_CONTEXT}\n\nYOUR EXPERTISE:\n- You find CONTENT GAPS where people are searching but finding poor answers\n- You understand what makes content go viral in this specific niche\n- You know the difference between generic topics and SPECIFIC, actionable ones\n\nEXAMPLES OF GOOD TOPICS:\n✅ \"How Personalized Bedtime Stories Helped My 4-Year-Old Overcome Sleep Anxiety\" (specific, emotional, relatable)\n❌ \"Benefits of Bedtime Stories\" (generic, boring)\n\n✅ \"Why Your SEO Strategy is Failing in the Age of ChatGPT (And What to Do Instead)\" (specific, timely, actionable)\n❌ \"SEO Best Practices\" (generic, overdone)\n\nYou will receive recent topics. You MUST suggest something COMPLETELY DIFFERENT.", llm=FREE_MODEL, verbose=True)
+trend_researcher = Agent(
+    role=f"Senior Content Strategist for {PAGE_NAME}",
+    goal=f"Identify UNIQUE, HIGH-VALUE blog topics that solve REAL problems for {PAGE_NAME}'s audience",
+    backstory=f"""You are a veteran content strategist with 15 years of experience in the {PAGE_NICHE} niche.
 
+{BRAND_CONTEXT}
+
+YOUR EXPERTISE:
+- You find CONTENT GAPS where people are searching but finding poor answers
+- You understand what makes content go viral in this specific niche
+- You know the difference between generic topics and SPECIFIC, actionable ones
+
+CRITICAL OUTPUT RULE:
+You MUST output ONLY a short blog title (under 100 characters).
+DO NOT output descriptions, explanations, or paragraphs.
+DO NOT output bullet points or multiple topics.
+OUTPUT FORMAT: Just the title, nothing else.
+
+EXAMPLES OF GOOD OUTPUT:
+✅ "How Personalized Bedtime Stories Helped My 4-Year-Old Overcome Sleep Anxiety"
+✅ "Why Your SEO Strategy is Failing in the Age of ChatGPT"
+❌ "Here's a great topic about bedtime stories. The angle is..." (WRONG - too long)
+❌ "Topic 1: Stories\nTopic 2: SEO" (WRONG - multiple topics)
+
+You will receive recent topics. You MUST suggest something COMPLETELY DIFFERENT.""",
+    llm=FREE_MODEL, verbose=True
+)
 blog_writer = Agent(role=f"Expert Blog Writer for {PAGE_NAME}", goal=f"Write {PAGE_NICHE} blog posts that feel like they were written by a trusted expert", backstory=f"You are a master storyteller and {PAGE_NICHE} expert writing specifically for {PAGE_NAME}.\n\n{BRAND_CONTEXT}\n\n{HUMANIZATION_RULES}\n\nYOUR WRITING PROCESS:\n1. Start with a HOOK that grabs attention in the first 2 sentences\n2. Establish the PROBLEM with specific, relatable examples\n3. Present the SOLUTION with step-by-step actionable advice\n4. Include REAL case studies or examples (use specific numbers and details)\n5. Address COMMON MISTAKES people make\n6. End with a clear TAKEAWAY or call-to-action\n\nSTRUCTURE (1,500-2,000 words):\n## Hook (grab attention)\n## The Problem (make it relatable)\n## The Solution (step-by-step)\n## Real Examples (specific case studies)\n## Common Mistakes (what to avoid)\n## FAQ Section (answer real questions)\n## Conclusion (clear takeaway)\n\nQUALITY CHECKLIST (before submitting):\n- Does it sound like a REAL person wrote it? (not AI)\n- Are there SPECIFIC examples with numbers? (not generic)\n- Does it naturally mention {PAGE_NAME} without being salesy? (1-2 times max)\n- Would a reader in the {PAGE_NICHE} niche find this VALUABLE?\n- Is it FREE of AI clichés? (no \"delve\", \"tapestry\", \"journey\", etc.)\n\nWrite for HUMANS first, search engines second.", llm=FREE_MODEL, verbose=True)
 
 seo_geo_optimizer = Agent(role="SEO & GEO Specialist", goal="Optimize content for Google AND AI search engines", backstory="You optimize content for both traditional search and AI engines (ChatGPT, Perplexity, Gemini).\n\nYOUR EXPERTISE:\n- Traditional SEO: keywords, meta tags, structure\n- GEO (Generative Engine Optimization): making content AI-friendly\n- Schema markup, FAQ optimization, featured snippets\n\nOUTPUT EXACT FORMAT:\nSLUG: [url-friendly-slug]\nMETA: [compelling meta description under 155 chars with keyword and CTA]\nKEYWORDS: [primary keyword, variation 1, variation 2, ...]\nGEO_SNIPPETS: [Direct answer 1] | [Direct answer 2]", llm=FREE_MODEL, verbose=True)
