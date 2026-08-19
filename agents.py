@@ -15,9 +15,11 @@ def _patched_completion(*args, **kwargs):
     def _strip(obj):
         if isinstance(obj, dict):
             obj.pop("cache_breakpoint", None)
-            for v in obj.values(): _strip(v)
+            for v in obj.values():
+                _strip(v)
         elif isinstance(obj, list):
-            for item in obj: _strip(item)
+            for item in obj:
+                _strip(item)
     _strip(kwargs)
     
     max_retries = 3
@@ -55,8 +57,10 @@ PAGE_NAME = os.getenv("PAGE_NAME", "Kahani AI")
 PAGE_NICHE = os.getenv("PAGE_NICHE", "general")
 PAGE_DESCRIPTION = os.getenv("PAGE_DESCRIPTION", "")
 
-if MISTRAL_KEY: os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
-if GEMINI_KEY: os.environ["GEMINI_API_KEY"] = GEMINI_KEY
+if MISTRAL_KEY:
+    os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
+if GEMINI_KEY:
+    os.environ["GEMINI_API_KEY"] = GEMINI_KEY
 
 # ============ STARTUP VALIDATION ============
 print(f"\n{'='*70}")
@@ -69,8 +73,10 @@ print(f"   MISTRAL_KEY present: {bool(MISTRAL_KEY)}")
 print(f"   GEMINI_KEY present: {bool(GEMINI_KEY)}")
 print(f"{'='*70}\n")
 
-if not NOTION_KEY: print("❌ CRITICAL: NOTION_API_KEY is not set!")
-if not MISTRAL_KEY: print("❌ CRITICAL: MISTRAL_API_KEY is not set!")
+if not NOTION_KEY:
+    print("❌ CRITICAL: NOTION_API_KEY is not set!")
+if not MISTRAL_KEY:
+    print("❌ CRITICAL: MISTRAL_API_KEY is not set!")
 
 try:
     from google.oauth2 import service_account
@@ -147,8 +153,8 @@ ALWAYS DO THESE (human signals):
 
 # ============ CLEANING HELPERS ============
 def clean_title(title):
-    if not title: return "Untitled"
-    # Remove markdown, quotes, asterisks
+    if not title:
+        return "Untitled"
     cleaned = re.sub(r'^[\s\*"\']+', '', title)
     cleaned = re.sub(r'[\s\*"\']+$', '', cleaned)
     cleaned = cleaned.strip()
@@ -161,7 +167,8 @@ def clean_title(title):
     return cleaned
 
 def clean_blog_content(content, title):
-    if not content: return ""
+    if not content:
+        return ""
     content = re.sub(r'^```(?:markdown|md)?\s*', '', content)
     content = re.sub(r'\s*```$', '', content)
     clean_t = clean_title(title)
@@ -179,7 +186,8 @@ def notion_headers():
     return {"Authorization": f"Bearer {NOTION_KEY}", "Notion-Version": "2022-06-28", "Content-Type": "application/json"}
 
 def fetch_active_strategy():
-    if not STRATEGY_DB_ID: return None
+    if not STRATEGY_DB_ID:
+        return None
     url = f"https://api.notion.com/v1/databases/{STRATEGY_DB_ID}/query"
     payload = {"filter": {"and": [{"property": "Status", "select": {"equals": "Active"}}, {"property": "Page", "select": {"equals": PAGE_NAME}}]}}
     response = requests.post(url, headers=notion_headers(), json=payload)
@@ -196,11 +204,14 @@ def fetch_active_strategy():
     return None
 
 def fetch_relevant_memories(memory_type=None, outcome=None, limit=10):
-    if not MEMORY_DB_ID: return []
+    if not MEMORY_DB_ID:
+        return []
     url = f"https://api.notion.com/v1/databases/{MEMORY_DB_ID}/query"
     filters = []
-    if memory_type: filters.append({"property": "Type", "select": {"equals": memory_type}})
-    if outcome: filters.append({"property": "Outcome", "select": {"equals": outcome}})
+    if memory_type:
+        filters.append({"property": "Type", "select": {"equals": memory_type}})
+    if outcome:
+        filters.append({"property": "Outcome", "select": {"equals": outcome}})
     payload = {"filter": {"and": filters} if filters else {}, "sorts": [{"property": "Confidence", "direction": "descending"}], "page_size": limit}
     response = requests.post(url, headers=notion_headers(), json=payload)
     memories = []
@@ -217,7 +228,8 @@ def fetch_relevant_memories(memory_type=None, outcome=None, limit=10):
     return memories
 
 def save_to_memory(summary, memory_type, content, outcome, reason, confidence=5):
-    if not MEMORY_DB_ID: return None
+    if not MEMORY_DB_ID:
+        return None
     url = "https://api.notion.com/v1/pages"
     payload = {
         "parent": {"database_id": MEMORY_DB_ID},
@@ -252,7 +264,8 @@ def fetch_recent_blog_titles(days=30, limit=20):
             title_props = result["properties"].get("Title", {}).get("title", [])
             if title_props:
                 title = title_props[0].get("text", {}).get("content", "")
-                if title: titles.append(title)
+                if title:
+                    titles.append(title)
     return titles
 
 # ============ AGENT-DRIVEN IMAGE GENERATION ============
@@ -288,17 +301,12 @@ def generate_blog_image_with_agent(title, blog_content, keywords, page_name=PAGE
 def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url, page_name=PAGE_NAME):
     url = "https://api.notion.com/v1/pages"
     clean_t = clean_title(title)
-    def create_notion_page_with_body(title, content, slug, meta_description, keywords, full_blog_content, image_url, page_name=PAGE_NAME):
-    url = "https://api.notion.com/v1/pages"
-    clean_t = clean_title(title)
     
     # CRITICAL: Final safety check - ensure title is under 2000 chars
     if len(clean_t) > 2000:
         print(f"⚠️ Title still too long ({len(clean_t)} chars), truncating to 1997...")
         clean_t = clean_t[:1997] + "..."
     
-    clean_content = clean_blog_content(full_blog_content, clean_t)
-    # ... rest of the function remains the same
     clean_content = clean_blog_content(full_blog_content, clean_t)
     excerpt = clean_content[:500] if clean_content else ""
     payload = {
@@ -329,13 +337,20 @@ def convert_text_to_notion_blocks(text):
     blocks = []
     for para in text.split('\n\n'):
         para = para.strip()
-        if not para: continue
-        if para.startswith('### '): blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"type": "text", "text": {"content": para[4:]}}]}})
-        elif para.startswith('## '): blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": para[3:]}}]}})
-        elif para.startswith('# '): blocks.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": [{"type": "text", "text": {"content": para[2:]}}]}})
-        elif para.startswith('- ') or para.startswith('* '): blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"type": "text", "text": {"content": para[2:]}}]}})
-        elif re.match(r'^\d+\. ', para): blocks.append({"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": [{"type": "text", "text": {"content": re.sub(r'^\d+\. ', '', para)}}]}})
-        else: blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": para}}]}})
+        if not para:
+            continue
+        if para.startswith('### '):
+            blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"type": "text", "text": {"content": para[4:]}}]}})
+        elif para.startswith('## '):
+            blocks.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": para[3:]}}]}})
+        elif para.startswith('# '):
+            blocks.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": [{"type": "text", "text": {"content": para[2:]}}]}})
+        elif para.startswith('- ') or para.startswith('* '):
+            blocks.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": [{"type": "text", "text": {"content": para[2:]}}]}})
+        elif re.match(r'^\d+\. ', para):
+            blocks.append({"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": [{"type": "text", "text": {"content": re.sub(r'^\d+\. ', '', para)}}]}})
+        else:
+            blocks.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": para}}]}})
     return blocks
 
 def fetch_unprocessed_published_blogs():
@@ -374,49 +389,27 @@ def create_facebook_caption(title, content, keywords):
     return f"📚 {clean_t}\n\n{intro}\n\n---\n💬 What's your experience? Share in the comments!\n\n#{PAGE_NAME.replace(' ', '')}"
 
 def post_to_instagram(image_url, caption):
-    if not IG_ACCOUNT_ID or not FB_ACCESS_TOKEN: return None
+    if not IG_ACCOUNT_ID or not FB_ACCESS_TOKEN:
+        return None
     res = requests.post(f"https://graph.facebook.com/v19.0/{IG_ACCOUNT_ID}/media", data={"image_url": image_url, "caption": caption, "access_token": FB_ACCESS_TOKEN})
-    if res.status_code != 200: return None
+    if res.status_code != 200:
+        return None
     container_id = res.json().get("id")
     time.sleep(5)
     res2 = requests.post(f"https://graph.facebook.com/v19.0/{IG_ACCOUNT_ID}/media_publish", data={"creation_id": container_id, "access_token": FB_ACCESS_TOKEN})
     return res2.json().get("id") if res2.status_code == 200 else None
 
 def post_to_facebook(image_url, caption):
-    if not FB_PAGE_ID or not FB_ACCESS_TOKEN: return None
+    if not FB_PAGE_ID or not FB_ACCESS_TOKEN:
+        return None
     res = requests.post(f"https://graph.facebook.com/v19.0/{FB_PAGE_ID}/photos", data={"message": caption, "url": image_url, "access_token": FB_ACCESS_TOKEN})
     return res.json().get("id") if res.status_code == 200 else None
 
 # ============ DEFINE AGENTS ============
 FREE_MODEL = "mistral/mistral-small-latest"
 
-trend_researcher = Agent(
-    role=f"Senior Content Strategist for {PAGE_NAME}",
-    goal=f"Identify UNIQUE, HIGH-VALUE blog topics that solve REAL problems for {PAGE_NAME}'s audience",
-    backstory=f"""You are a veteran content strategist with 15 years of experience in the {PAGE_NICHE} niche.
+trend_researcher = Agent(role=f"Senior Content Strategist for {PAGE_NAME}", goal=f"Identify UNIQUE, HIGH-VALUE blog topics that solve REAL problems for {PAGE_NAME}'s audience", backstory=f"You are a veteran content strategist with 15 years of experience in the {PAGE_NICHE} niche.\n\n{BRAND_CONTEXT}\n\nYOUR EXPERTISE:\n- You find CONTENT GAPS where people are searching but finding poor answers\n- You understand what makes content go viral in this specific niche\n- You know the difference between generic topics and SPECIFIC, actionable ones\n\nCRITICAL OUTPUT RULE:\nYou MUST output ONLY a short blog title (under 100 characters).\nDO NOT output descriptions, explanations, or paragraphs.\nDO NOT output bullet points or multiple topics.\nOUTPUT FORMAT: Just the title, nothing else.\n\nEXAMPLES OF GOOD OUTPUT:\n✅ \"How Personalized Bedtime Stories Helped My 4-Year-Old Overcome Sleep Anxiety\"\n✅ \"Why Your SEO Strategy is Failing in the Age of ChatGPT\"\n❌ \"Here's a great topic about bedtime stories. The angle is...\" (WRONG - too long)\n❌ \"Topic 1: Stories\nTopic 2: SEO\" (WRONG - multiple topics)\n\nYou will receive recent topics. You MUST suggest something COMPLETELY DIFFERENT.", llm=FREE_MODEL, verbose=True)
 
-{BRAND_CONTEXT}
-
-YOUR EXPERTISE:
-- You find CONTENT GAPS where people are searching but finding poor answers
-- You understand what makes content go viral in this specific niche
-- You know the difference between generic topics and SPECIFIC, actionable ones
-
-CRITICAL OUTPUT RULE:
-You MUST output ONLY a short blog title (under 100 characters).
-DO NOT output descriptions, explanations, or paragraphs.
-DO NOT output bullet points or multiple topics.
-OUTPUT FORMAT: Just the title, nothing else.
-
-EXAMPLES OF GOOD OUTPUT:
-✅ "How Personalized Bedtime Stories Helped My 4-Year-Old Overcome Sleep Anxiety"
-✅ "Why Your SEO Strategy is Failing in the Age of ChatGPT"
-❌ "Here's a great topic about bedtime stories. The angle is..." (WRONG - too long)
-❌ "Topic 1: Stories\nTopic 2: SEO" (WRONG - multiple topics)
-
-You will receive recent topics. You MUST suggest something COMPLETELY DIFFERENT.""",
-    llm=FREE_MODEL, verbose=True
-)
 blog_writer = Agent(role=f"Expert Blog Writer for {PAGE_NAME}", goal=f"Write {PAGE_NICHE} blog posts that feel like they were written by a trusted expert", backstory=f"You are a master storyteller and {PAGE_NICHE} expert writing specifically for {PAGE_NAME}.\n\n{BRAND_CONTEXT}\n\n{HUMANIZATION_RULES}\n\nYOUR WRITING PROCESS:\n1. Start with a HOOK that grabs attention in the first 2 sentences\n2. Establish the PROBLEM with specific, relatable examples\n3. Present the SOLUTION with step-by-step actionable advice\n4. Include REAL case studies or examples (use specific numbers and details)\n5. Address COMMON MISTAKES people make\n6. End with a clear TAKEAWAY or call-to-action\n\nSTRUCTURE (1,500-2,000 words):\n## Hook (grab attention)\n## The Problem (make it relatable)\n## The Solution (step-by-step)\n## Real Examples (specific case studies)\n## Common Mistakes (what to avoid)\n## FAQ Section (answer real questions)\n## Conclusion (clear takeaway)\n\nQUALITY CHECKLIST (before submitting):\n- Does it sound like a REAL person wrote it? (not AI)\n- Are there SPECIFIC examples with numbers? (not generic)\n- Does it naturally mention {PAGE_NAME} without being salesy? (1-2 times max)\n- Would a reader in the {PAGE_NICHE} niche find this VALUABLE?\n- Is it FREE of AI clichés? (no \"delve\", \"tapestry\", \"journey\", etc.)\n\nWrite for HUMANS first, search engines second.", llm=FREE_MODEL, verbose=True)
 
 seo_geo_optimizer = Agent(role="SEO & GEO Specialist", goal="Optimize content for Google AND AI search engines", backstory="You optimize content for both traditional search and AI engines (ChatGPT, Perplexity, Gemini).\n\nYOUR EXPERTISE:\n- Traditional SEO: keywords, meta tags, structure\n- GEO (Generative Engine Optimization): making content AI-friendly\n- Schema markup, FAQ optimization, featured snippets\n\nOUTPUT EXACT FORMAT:\nSLUG: [url-friendly-slug]\nMETA: [compelling meta description under 155 chars with keyword and CTA]\nKEYWORDS: [primary keyword, variation 1, variation 2, ...]\nGEO_SNIPPETS: [Direct answer 1] | [Direct answer 2]", llm=FREE_MODEL, verbose=True)
@@ -448,7 +441,7 @@ def run_blog_creation_phase():
     failure_memories = fetch_relevant_memories(outcome="Failure", limit=3)
     success_memories = fetch_relevant_memories(outcome="Success", limit=3)
 
-    MAX_REVISIONS = 2  # Back to 2 attempts
+    MAX_REVISIONS = 2
     ceo_feedback = None
     final_blog_content = final_seo_output = final_ceo_decision = final_title = None
 
@@ -564,13 +557,19 @@ def run_blog_creation_phase():
     slug = meta = keywords = ""
     if final_seo_output:
         for line in final_seo_output.split('\n'):
-            if line.startswith("SLUG:"): slug = line.replace("SLUG:", "").strip()
-            elif line.startswith("META:"): meta = line.replace("META:", "").strip()
-            elif line.startswith("KEYWORDS:"): keywords = line.replace("KEYWORDS:", "").strip()
+            if line.startswith("SLUG:"):
+                slug = line.replace("SLUG:", "").strip()
+            elif line.startswith("META:"):
+                meta = line.replace("META:", "").strip()
+            elif line.startswith("KEYWORDS:"):
+                keywords = line.replace("KEYWORDS:", "").strip()
     
-    if not slug and final_title: slug = re.sub(r'[^a-z0-9]+', '-', final_title.lower()).strip('-')[:50]
-    if not meta and final_title: meta = f"Discover expert insights on {final_title}."
-    if not keywords: keywords = PAGE_NICHE
+    if not slug and final_title:
+        slug = re.sub(r'[^a-z0-9]+', '-', final_title.lower()).strip('-')[:50]
+    if not meta and final_title:
+        meta = f"Discover expert insights on {final_title}."
+    if not keywords:
+        keywords = PAGE_NICHE
 
     is_approved = "DECISION: APPROVED" in final_ceo_decision.upper() if final_ceo_decision else False
     print(f"\nFinal: {'APPROVED' if is_approved else 'REJECTED'} | Title: {final_title}")
@@ -605,7 +604,8 @@ def run_social_promotion_phase():
 def get_search_console_service():
     try:
         key_json = os.getenv("GOOGLE_SEARCH_CONSOLE_KEY")
-        if not key_json: return None
+        if not key_json:
+            return None
         credentials = service_account.Credentials.from_service_account_info(json.loads(key_json), scopes=['https://www.googleapis.com/auth/webmasters.readonly'])
         return build('searchconsole', 'v1', credentials=credentials)
     except Exception as e:
@@ -616,7 +616,8 @@ def get_analytics_service():
     try:
         key_json = os.getenv("GOOGLE_ANALYTICS_KEY")
         analytics_id = os.getenv("GOOGLE_ANALYTICS_ID")
-        if not key_json or not analytics_id: return None, None
+        if not key_json or not analytics_id:
+            return None, None
         credentials = service_account.Credentials.from_service_account_info(json.loads(key_json), scopes=['https://www.googleapis.com/auth/analytics.readonly'])
         return build('analyticsdata', 'v1beta', credentials=credentials), analytics_id
     except Exception as e:
@@ -625,7 +626,8 @@ def get_analytics_service():
 
 def fetch_search_console_data(site_url, days=28):
     service = get_search_console_service()
-    if not service: return None
+    if not service:
+        return None
     try:
         end_date = datetime.now().strftime('%Y-%m-%d')
         start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
@@ -636,7 +638,8 @@ def fetch_search_console_data(site_url, days=28):
 
 def fetch_indexing_status(site_url):
     service = get_search_console_service()
-    if not service: return None
+    if not service:
+        return None
     try:
         status_report = []
         for title in fetch_recent_blog_titles(days=30, limit=10)[:5]:
@@ -644,7 +647,8 @@ def fetch_indexing_status(site_url):
             try:
                 inspection = service.urlInspection().index().inspect(body={"siteUrl": site_url, "inspectionUrl": url}).execute()
                 status_report.append({'url': url, 'status': inspection.get('inspectionResult', {}).get('coverageState', 'Unknown'), 'title': title})
-            except Exception: pass
+            except Exception:
+                pass
         return status_report
     except Exception as e:
         print(f"❌ Indexing status error: {e}")
@@ -652,7 +656,8 @@ def fetch_indexing_status(site_url):
 
 def fetch_analytics_data(analytics_id, days=28):
     service, _ = get_analytics_service()
-    if not service: return None
+    if not service:
+        return None
     try:
         end_date = datetime.now().strftime('%Y-%m-%d')
         start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
@@ -736,7 +741,7 @@ def run_daily_agency():
     
     print("\n🎉 Done!")
 
-# ============ CRITICAL: This block was missing! ============
+# ============ CRITICAL: Main execution block ============
 if __name__ == "__main__":
     try:
         print("\n🎯 Starting main execution...")
