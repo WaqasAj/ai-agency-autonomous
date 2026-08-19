@@ -12,7 +12,6 @@ import litellm
 _original_completion = litellm.completion
 
 def _patched_completion(*args, **kwargs):
-    # 1. Strip cache_breakpoint
     def _strip(obj):
         if isinstance(obj, dict):
             obj.pop("cache_breakpoint", None)
@@ -21,7 +20,6 @@ def _patched_completion(*args, **kwargs):
             for item in obj: _strip(item)
     _strip(kwargs)
     
-    # 2. Retry logic with Gemini fallback
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -377,7 +375,12 @@ def run_blog_creation_phase():
         )
 
         research_task = Task(description=research_desc, expected_output="A single blog topic title", agent=trend_researcher)
-        Crew(agents=[trend_researcher], tasks=[research_task], process=Process.sequential, verbose=True).kickoff()
+        
+        try:
+            Crew(agents=[trend_researcher], tasks=[research_task], process=Process.sequential, verbose=True).kickoff()
+        except Exception as e:
+            print(f"❌ Researcher failed: {e}")
+            return {"title": "Failed", "status": "failed", "feedback": str(e)}
 
         final_title = clean_title(research_task.output.raw.strip()) if research_task.output else "Untitled"
         print(f"\n✅ Topic: {final_title}")
@@ -392,19 +395,24 @@ def run_blog_creation_phase():
         strategy_ctx = f"\nStrategy: {strategy['goal']}. Audience: {strategy['target_audience']}." if strategy else ""
         review_task = Task(description=f"Review for {PAGE_NAME} with STRICT standards.\nRECENT TOPICS:\n{recent_text}\nIf duplicate or off-topic, REJECT.{strategy_ctx}\nOutput: DECISION, SCORE, REASONS, FIXES_NEEDED", expected_output="DECISION, SCORE, REASONS, FIXES_NEEDED", agent=ceo_reviewer)
 
+        # CRITICAL: Wrap the entire crew execution in try/except
         try:
             Crew(agents=[blog_writer, seo_geo_optimizer, ceo_reviewer], tasks=[write_task, seo_task, review_task], process=Process.sequential, verbose=True).kickoff()
         except Exception as e:
-            print(f"⚠️ Crew execution failed (likely API rate limit): {e}")
-            # SALVAGE: If the blog was written but SEO/CEO failed, publish it anyway with auto-generated SEO
+            print(f"\n⚠️ Crew execution failed (likely API rate limit): {e}")
+            print("🔧 Attempting to salvage written content...")
+            
+            # Check if the writer completed before the crash
             if write_task.output and write_task.output.raw.strip():
-                print("⚠️ Salvaging written blog content and auto-generating SEO...")
+                print("✅ Blog content was written! Salvaging and auto-generating SEO...")
                 final_blog_content = write_task.output.raw.strip()
-                final_seo_output = f"SLUG: {re.sub(r'[^a-z0-9]+', '-', final_title.lower()).strip('-')[:50]}\nMETA: Discover expert insights on {final_title}.\nKEYWORDS: {PAGE_NICHE}\nGEO_SNIPPETS: Learn more about {final_title}."
+                final_title_clean = re.sub(r'[^a-z0-9]+', '-', final_title.lower()).strip('-')[:50]
+                final_seo_output = f"SLUG: {final_title_clean}\nMETA: Discover expert insights on {final_title}.\nKEYWORDS: {PAGE_NICHE}\nGEO_SNIPPETS: Learn more about {final_title}."
                 final_ceo_decision = "DECISION: APPROVED (auto-approved due to API failure salvage)"
+                print("✅ Salvage successful! Publishing blog...")
                 break
             else:
-                print("❌ No content generated. Cannot publish.")
+                print("❌ No content generated before crash. Cannot publish.")
                 return {"title": final_title, "status": "failed", "feedback": str(e)}
 
         blog_content = write_task.output.raw.strip() if write_task.output else ""
@@ -431,7 +439,6 @@ def run_blog_creation_phase():
             elif line.startswith("META:"): meta = line.replace("META:", "").strip()
             elif line.startswith("KEYWORDS:"): keywords = line.replace("KEYWORDS:", "").strip()
     
-    # Fallback SEO if missing
     if not slug and final_title: slug = re.sub(r'[^a-z0-9]+', '-', final_title.lower()).strip('-')[:50]
     if not meta and final_title: meta = f"Discover expert insights on {final_title}."
     if not keywords: keywords = PAGE_NICHE
@@ -575,26 +582,30 @@ def run_daily_agency():
     print(f"🚀 Starting agency for {PAGE_NAME} ({PAGE_NICHE})")
     print(f"{'='*60}")
     
+    # Blog creation runs EVERY TIME
     try:
         run_blog_creation_phase()
     except Exception as e:
         print(f"⚠️ Blog error: {e}")
         traceback.print_exc()
     
+    # Social media runs EVERY TIME
     try:
         run_social_promotion_phase()
     except Exception as e:
         print(f"⚠️ Social error: {e}")
         traceback.print_exc()
     
-    # Run SEO monitor (Set to True for testing. Change to: datetime.now().weekday() == 6 for Sundays only)
-    if True: 
+    # SEO monitor runs ONLY on Sundays (every 7 days)
+    if datetime.now().weekday() == 6:  # 0=Monday, 6=Sunday
         try:
-            print("\n🔍 Running SEO audit...")
+            print("\n🔍 Running weekly SEO audit (Sunday schedule)...")
             run_seo_monitor()
         except Exception as e:
             print(f"⚠️ SEO monitor error: {e}")
             traceback.print_exc()
+    else:
+        print(f"\n📅 SEO Monitor: Skipping (next run on Sunday)")
     
     print("\n🎉 Done!")
 
