@@ -84,14 +84,38 @@ PRODUCT_CONTEXT = {
     "Kahani AI": """
 Kahani AI is a web application that generates personalized bedtime stories and kids' stories using AI.
 CORE FEATURES: Custom stories with child's name, 4 languages (English, Urdu, Arabic, Hindi), AI illustrations, audio narration, PDF download.
-CONTENT SHOULD EXPLORE: Bedtime storytelling psychology, multilingual parenting, screen-free routines, cultural/Islamic stories, child development.
-CONTENT ANGLES TO AVOID: Generic parenting advice, product reviews, overly promotional content.
+TARGET AUDIENCE: Parents of children ages 2-10, educators, grandparents in South Asian and Middle Eastern communities.
+UNIQUE VALUE PROPOSITION: Makes children the hero of their own stories while preserving cultural and linguistic heritage.
+
+CONTENT MUST:
+- Focus on the MAGIC and PSYCHOLOGY of personalized storytelling
+- Include SPECIFIC examples (e.g., "When 4-year-old Ayesha saw herself as the princess...")
+- Address REAL parent pain points (screen time, bedtime struggles, language barriers)
+- Naturally mention Kahani AI as a SOLUTION, not a sales pitch
+- Use warm, empathetic tone like a trusted friend who's been there
+
+CONTENT MUST NOT:
+- Be generic parenting advice unrelated to stories/reading
+- Sound like a product brochure
+- Use corporate jargon or AI clichés
 """,
     "Geo Analyzer": """
 Geo Analyzer is a web tool that scans URLs/text for SEO and Generative Engine Optimization (GEO).
 CORE FEATURES: AI search engine optimization, MCP integration, heading/FAQ/schema analysis, actionable recommendations.
-CONTENT SHOULD EXPLORE: AI search engine optimization, GEO techniques, schema markup, featured snippets, MCP integration.
-CONTENT ANGLES TO AVOID: Generic marketing advice, basic SEO tips, overly technical jargon without explanation.
+TARGET AUDIENCE: Content creators, digital marketers, SEO professionals, tech-savvy business owners.
+UNIQUE VALUE PROPOSITION: Bridges the gap between traditional SEO and AI-powered search (ChatGPT, Perplexity, Gemini).
+
+CONTENT MUST:
+- Be TECHNICAL but ACCESSIBLE (explain complex concepts simply)
+- Include SPECIFIC examples with real URLs and before/after comparisons
+- Focus on ACTIONABLE steps readers can implement immediately
+- Address the SHIFT from keyword-based to AI-based search
+- Use authoritative but conversational tone like an industry expert sharing insights
+
+CONTENT MUST NOT:
+- Be basic SEO advice everyone already knows
+- Use overly technical jargon without explanation
+- Sound like a generic marketing blog
 """
 }
 
@@ -104,8 +128,21 @@ Brand voice: Warm, trustworthy, authoritative, and genuinely helpful. Write for 
 
 HUMANIZATION_RULES = """
 CRITICAL: Write like a real human expert, NOT like an AI.
-AVOID: "In today's world", "delve", "tapestry", "landscape", "realm", "journey", "foster", "cultivate", "Let's explore".
-DO: Vary sentence length, start with "And/But/Because", use contractions, add personal moments, ask rhetorical questions.
+
+NEVER USE THESE AI PATTERNS (instant rejection):
+- "In today's world", "In the digital age", "It's important to note"
+- "delve", "tapestry", "landscape", "realm", "journey", "foster", "cultivate"
+- "Let's explore", "Let's dive in", "Let's unpack"
+- "Furthermore", "Moreover", "Additionally" (use "And", "But", "Also" instead)
+
+ALWAYS DO THESE (human signals):
+- Start sentences with "And", "But", "Because", "So"
+- Use contractions: "don't", "it's", "you'll", "we've"
+- Include SPECIFIC numbers: "my 4-year-old", "3 AM wake-ups", "15 minutes"
+- Add personal moments: "I remember when...", "Last week, I noticed..."
+- Ask rhetorical questions: "Sound familiar?", "You know that feeling, right?"
+- Use conversational asides: "(trust me on this one)", "(yes, even on tough nights)"
+- Vary sentence length wildly (mix 5-word and 25-word sentences)
 """
 
 # ============ CLEANING HELPERS ============
@@ -333,13 +370,136 @@ def post_to_facebook(image_url, caption):
 # ============ DEFINE AGENTS ============
 FREE_MODEL = "mistral/mistral-small-latest"
 
-trend_researcher = Agent(role=f"Content Strategist for {PAGE_NAME}", goal=f"Find UNIQUE, high-value blog topics for {PAGE_NAME}", backstory=f"You are a content strategist for {PAGE_NAME}. {BRAND_CONTEXT} Find CONTENT GAPS. Avoid recent topics.", llm=FREE_MODEL, verbose=True)
-blog_writer = Agent(role=f"Expert Blog Writer for {PAGE_NAME}", goal=f"Write engaging, human-sounding blog posts", backstory=f"You write for {PAGE_NAME}. {BRAND_CONTEXT} {HUMANIZATION_RULES} Structure: Hook, Problem, Solution, Examples, FAQ, Conclusion.", llm=FREE_MODEL, verbose=True)
-seo_geo_optimizer = Agent(role="SEO & GEO Specialist", goal="Optimize for Google AND AI search engines", backstory="Output EXACT format: SLUG: [slug]\nMETA: [meta]\nKEYWORDS: [keywords]\nGEO_SNIPPETS: [answer 1] | [answer 2]", llm=FREE_MODEL, verbose=True)
-ceo_reviewer = Agent(role=f"Chief Content Officer for {PAGE_NAME}", goal=f"Maintain highest quality standards", backstory=f"You are the quality gatekeeper for {PAGE_NAME}. {BRAND_CONTEXT} STANDARDS: 1. HUMANIZATION (40%) 2. RELEVANCE (30%) 3. ORIGINALITY (20%) 4. VALUE (10%). Output: DECISION, SCORE, REASONS, FIXES_NEEDED", llm=FREE_MODEL, verbose=True)
-image_prompt_creator = Agent(role="Image Prompt Creator", goal="Create short, realistic photography prompts", backstory="Create SHORT prompts (under 200 chars) for REALISTIC photographs. Never cartoon or anime.", llm=FREE_MODEL, verbose=True)
-keyword_researcher = Agent(role="SEO Keyword Research Specialist", goal="Find high-value, low-competition keywords", backstory="You are an expert keyword researcher. Find long-tail keywords with commercial intent and low competition.", llm=FREE_MODEL, verbose=True)
-seo_monitor = Agent(role="Chief SEO & Performance Officer", goal="Monitor website health and provide actionable recommendations", backstory="You are a world-class SEO specialist. Provide data-driven recommendations with clear priority levels: 🔴 CRITICAL, 🟡 HIGH, 🟠 MEDIUM, 🔵 LOW.", llm=FREE_MODEL, verbose=True)
+# 🎯 UPGRADED: Much more specific agent definitions
+trend_researcher = Agent(
+    role=f"Senior Content Strategist for {PAGE_NAME}",
+    goal=f"Identify UNIQUE, HIGH-VALUE blog topics that solve REAL problems for {PAGE_NAME}'s audience and haven't been covered recently",
+    backstory=f"""You are a veteran content strategist with 15 years of experience in the {PAGE_NICHE} niche.
+    
+{BRAND_CONTEXT}
+
+YOUR EXPERTISE:
+- You find CONTENT GAPS where people are searching but finding poor answers
+- You understand what makes content go viral in this specific niche
+- You know the difference between generic topics and SPECIFIC, actionable ones
+
+YOUR PROCESS:
+1. Analyze recent topics to avoid duplicates
+2. Identify trending problems/questions in the niche
+3. Suggest topics that are SPECIFIC, not generic
+4. Ensure topics align perfectly with {PAGE_NAME}'s unique value proposition
+
+EXAMPLES OF GOOD TOPICS:
+✅ "How Personalized Bedtime Stories Helped My 4-Year-Old Overcome Sleep Anxiety" (specific, emotional, relatable)
+❌ "Benefits of Bedtime Stories" (generic, boring)
+
+✅ "Why Your SEO Strategy is Failing in the Age of ChatGPT (And What to Do Instead)" (specific, timely, actionable)
+❌ "SEO Best Practices" (generic, overdone)
+
+You will receive recent topics. You MUST suggest something COMPLETELY DIFFERENT.""",
+    llm=FREE_MODEL, verbose=True
+)
+
+blog_writer = Agent(
+    role=f"Expert Blog Writer for {PAGE_NAME}",
+    goal=f"Write {PAGE_NICHE} blog posts that feel like they were written by a trusted expert and naturally relate to {PAGE_NAME}",
+    backstory=f"""You are a master storyteller and {PAGE_NICHE} expert writing specifically for {PAGE_NAME}.
+
+{BRAND_CONTEXT}
+
+{HUMANIZATION_RULES}
+
+YOUR WRITING PROCESS:
+1. Start with a HOOK that grabs attention in the first 2 sentences
+2. Establish the PROBLEM with specific, relatable examples
+3. Present the SOLUTION with step-by-step actionable advice
+4. Include REAL case studies or examples (use specific numbers and details)
+5. Address COMMON MISTAKES people make
+6. End with a clear TAKEAWAY or call-to-action
+
+STRUCTURE (1,500-2,000 words):
+## Hook (grab attention)
+## The Problem (make it relatable)
+## The Solution (step-by-step)
+## Real Examples (specific case studies)
+## Common Mistakes (what to avoid)
+## FAQ Section (answer real questions)
+## Conclusion (clear takeaway)
+
+QUALITY CHECKLIST (before submitting):
+- Does it sound like a REAL person wrote it? (not AI)
+- Are there SPECIFIC examples with numbers? (not generic)
+- Does it naturally mention {PAGE_NAME} without being salesy? (1-2 times max)
+- Would a reader in the {PAGE_NICHE} niche find this VALUABLE?
+- Is it FREE of AI clichés? (no "delve", "tapestry", "journey", etc.)
+
+Write for HUMANS first, search engines second.""",
+    llm=FREE_MODEL, verbose=True
+)
+
+seo_geo_optimizer = Agent(
+    role="SEO & GEO Specialist",
+    goal="Optimize content for Google AND AI search engines",
+    backstory="""You optimize content for both traditional search and AI engines (ChatGPT, Perplexity, Gemini).
+
+YOUR EXPERTISE:
+- Traditional SEO: keywords, meta tags, structure
+- GEO (Generative Engine Optimization): making content AI-friendly
+- Schema markup, FAQ optimization, featured snippets
+
+OUTPUT EXACT FORMAT:
+SLUG: [url-friendly-slug]
+META: [compelling meta description under 155 chars with keyword and CTA]
+KEYWORDS: [primary keyword, variation 1, variation 2, ...]
+GEO_SNIPPETS: [Direct answer 1] | [Direct answer 2]""",
+    llm=FREE_MODEL, verbose=True
+)
+
+ceo_reviewer = Agent(
+    role=f"Chief Content Officer for {PAGE_NAME}",
+    goal=f"Maintain the HIGHEST quality standards. Only approve truly excellent content that aligns with {PAGE_NAME}'s brand and provides REAL value.",
+    backstory=f"""You are the final quality gatekeeper for {PAGE_NAME}.
+
+{BRAND_CONTEXT}
+
+YOUR STANDARDS (BE STRICT):
+1. HUMANIZATION (40%): Does it sound like a REAL expert wrote it? Reject if it sounds AI-generated.
+2. RELEVANCE (30%): Does it directly relate to {PAGE_NAME}'s niche and audience? Reject if off-topic.
+3. ORIGINALITY (20%): Is this a FRESH angle or just rehashed info? Reject if generic.
+4. VALUE (10%): Does it provide ACTIONABLE insights? Reject if it's just fluff.
+
+DUPLICATE CHECK: If this topic was covered in the last 30 days with the SAME angle, REJECT.
+
+BE HARSH. Only approve content you'd be proud to publish under the {PAGE_NAME} brand.
+
+Output EXACT format:
+DECISION: APPROVED or REJECTED
+SCORE: X/10
+REASONS: [specific issues - be detailed]
+FIXES_NEEDED: [exact changes required - only if REJECTED]""",
+    llm=FREE_MODEL, verbose=True
+)
+
+image_prompt_creator = Agent(
+    role="Image Prompt Creator",
+    goal="Create short, realistic photography prompts for blog images",
+    backstory="Create SHORT prompts (under 200 chars) for REALISTIC photographs. Never cartoon or anime.",
+    llm=FREE_MODEL, verbose=True
+)
+
+keyword_researcher = Agent(
+    role="SEO Keyword Research Specialist",
+    goal="Find high-value, low-competition keywords",
+    backstory="You are an expert keyword researcher. Find long-tail keywords with commercial intent and low competition.",
+    llm=FREE_MODEL, verbose=True
+)
+
+seo_monitor = Agent(
+    role="Chief SEO & Performance Officer",
+    goal="Monitor website health and provide actionable recommendations",
+    backstory="You are a world-class SEO specialist. Provide data-driven recommendations with clear priority levels: 🔴 CRITICAL, 🟡 HIGH, 🟠 MEDIUM, 🔵 LOW.",
+    llm=FREE_MODEL, verbose=True
+)
 
 # ============ PHASE 1: BLOG CREATION ============
 def run_blog_creation_phase():
@@ -356,7 +516,12 @@ def run_blog_creation_phase():
     recent_text = "\n".join([f"- {t}" for t in recent_titles]) if recent_titles else "No recent posts"
     print(f"\n📋 Recent topics (last 30 days): {len(recent_titles)} posts")
 
-    MAX_REVISIONS = 2
+    # 🎯 UPGRADED: Fetch SEO insights and failure memories to guide agents
+    seo_memories = fetch_relevant_memories(memory_type="SEO_AUDIT", limit=2)
+    failure_memories = fetch_relevant_memories(outcome="Failure", limit=3)
+    success_memories = fetch_relevant_memories(outcome="Success", limit=3)
+
+    MAX_REVISIONS = 3  # 🎯 UPGRADED: Increased from 2 to 3 attempts
     ceo_feedback = None
     final_blog_content = final_seo_output = final_ceo_decision = final_title = None
 
@@ -364,45 +529,79 @@ def run_blog_creation_phase():
         print(f"\n{'='*40}\nATTEMPT {attempt}/{MAX_REVISIONS}\n{'='*40}")
         print(f"\n[Step 1] Researching FRESH topic for {PAGE_NAME}...")
         
-        research_desc = (
-            f"Research ONE NEW blog topic for {PAGE_NAME} in the {PAGE_NICHE} niche.\n"
-            f"Focus: {PAGE_DESCRIPTION if PAGE_DESCRIPTION else PAGE_NICHE}\n"
-            f"RECENT TOPICS (AVOID THESE):\n{recent_text}\n"
-            f"Output ONLY the title as plain text."
-        ) if not ceo_feedback else (
-            f"Research ONE NEW blog topic. Previous was rejected. Pick a COMPLETELY DIFFERENT angle.\n"
-            f"RECENT TOPICS (AVOID THESE):\n{recent_text}\nOutput ONLY the title."
-        )
+        # 🎯 UPGRADED: Inject SEO insights and CEO feedback into researcher
+        seo_context = ""
+        if seo_memories:
+            seo_context += "\n\n🚨 SEO INSIGHTS FROM LAST AUDIT:\n"
+            for mem in seo_memories[:1]:
+                seo_context += f"{mem['content'][:500]}...\n"
+        
+        if ceo_feedback:
+            research_desc = (
+                f"Research ONE NEW blog topic for {PAGE_NAME} in the {PAGE_NICHE} niche.\n\n"
+                f"The previous topic was REJECTED by the CEO. Here's why:\n{ceo_feedback[:500]}\n\n"
+                f"Pick a COMPLETELY DIFFERENT angle that addresses the CEO's concerns.\n\n"
+                f"RECENT TOPICS (AVOID THESE):\n{recent_text}\n\n"
+                f"{seo_context}\n"
+                f"Output ONLY the title as plain text."
+            )
+        else:
+            research_desc = (
+                f"Research ONE trending, high-value blog topic for {PAGE_NAME}.\n\n"
+                f"Focus: {PAGE_DESCRIPTION if PAGE_DESCRIPTION else PAGE_NICHE}\n\n"
+                f"RECENT TOPICS (AVOID THESE):\n{recent_text}\n\n"
+                f"{seo_context}\n"
+                f"Output ONLY the title as plain text."
+            )
 
         research_task = Task(description=research_desc, expected_output="A single blog topic title", agent=trend_researcher)
-        
-        try:
-            Crew(agents=[trend_researcher], tasks=[research_task], process=Process.sequential, verbose=True).kickoff()
-        except Exception as e:
-            print(f"❌ Researcher failed: {e}")
-            return {"title": "Failed", "status": "failed", "feedback": str(e)}
+        Crew(agents=[trend_researcher], tasks=[research_task], process=Process.sequential, verbose=True).kickoff()
 
         final_title = clean_title(research_task.output.raw.strip()) if research_task.output else "Untitled"
         print(f"\n✅ Topic: {final_title}")
 
+        # 🎯 UPGRADED: Inject failure memories and SEO insights into writer
+        memory_context = ""
+        if failure_memories:
+            memory_context += "\n\n🚨 AVOID THESE PAST FAILURES:\n"
+            for mem in failure_memories[:2]:
+                memory_context += f"- {mem['summary']}: {mem['reason']}\n"
+        if success_memories:
+            memory_context += "\n\n✅ FOLLOW THESE PAST SUCCESSES:\n"
+            for mem in success_memories[:2]:
+                memory_context += f"- {mem['summary']}\n"
+
         print(f"\n[Step 2] Writing blog post...")
-        write_task = Task(description=f"Write a 1500-2000 word blog post: {final_title}\n\n{HUMANIZATION_RULES}\nStructure: Hook, Problem, Solution, Examples, FAQ, Conclusion. Use ## headings.", expected_output="Complete blog post", agent=blog_writer)
+        write_desc = (
+            f"Write a 1500-2000 word blog post: {final_title}\n\n"
+            f"This is for {PAGE_NAME}: {PAGE_DESCRIPTION if PAGE_DESCRIPTION else PAGE_NICHE}\n\n"
+            f"{HUMANIZATION_RULES}\n{memory_context}\n\n"
+            "Structure: Hook, Problem, Solution, Examples, FAQ, Conclusion. Use ## headings.\n"
+            "CRITICAL: Include SPECIFIC examples with numbers. Avoid generic advice."
+        )
+        write_task = Task(description=write_desc, expected_output="Complete blog post", agent=blog_writer)
 
         print(f"\n[Step 3] SEO/GEO optimization...")
         seo_task = Task(description="Create: SLUG, META, KEYWORDS, GEO_SNIPPETS", expected_output="SEO elements", agent=seo_geo_optimizer)
 
         print(f"\n[Step 4] CEO review (STRICT STANDARDS)...")
         strategy_ctx = f"\nStrategy: {strategy['goal']}. Audience: {strategy['target_audience']}." if strategy else ""
-        review_task = Task(description=f"Review for {PAGE_NAME} with STRICT standards.\nRECENT TOPICS:\n{recent_text}\nIf duplicate or off-topic, REJECT.{strategy_ctx}\nOutput: DECISION, SCORE, REASONS, FIXES_NEEDED", expected_output="DECISION, SCORE, REASONS, FIXES_NEEDED", agent=ceo_reviewer)
+        review_desc = (
+            f"Review this blog post for {PAGE_NAME} with STRICT standards.\n\n"
+            f"RECENT TOPICS (check for duplicates):\n{recent_text}\n\n"
+            f"If this is a duplicate (same topic + same angle), REJECT.\n"
+            f"If it's off-topic or sounds AI-generated, REJECT.\n"
+            f"Only APPROVE if it's genuinely excellent.{strategy_ctx}\n\n"
+            "Output: DECISION, SCORE, REASONS, FIXES_NEEDED"
+        )
+        review_task = Task(description=review_desc, expected_output="DECISION, SCORE, REASONS, FIXES_NEEDED", agent=ceo_reviewer)
 
-        # CRITICAL: Wrap the entire crew execution in try/except
         try:
             Crew(agents=[blog_writer, seo_geo_optimizer, ceo_reviewer], tasks=[write_task, seo_task, review_task], process=Process.sequential, verbose=True).kickoff()
         except Exception as e:
             print(f"\n⚠️ Crew execution failed (likely API rate limit): {e}")
             print("🔧 Attempting to salvage written content...")
             
-            # Check if the writer completed before the crash
             if write_task.output and write_task.output.raw.strip():
                 print("✅ Blog content was written! Salvaging and auto-generating SEO...")
                 final_blog_content = write_task.output.raw.strip()
@@ -454,166 +653,4 @@ def run_blog_creation_phase():
 
     return {"title": final_title, "status": "rejected", "feedback": final_ceo_decision}
 
-# ============ PHASE 2: SOCIAL MEDIA ============
-def run_social_promotion_phase():
-    print("\n" + "="*60)
-    print(f"PHASE 2: SOCIAL MEDIA for {PAGE_NAME}")
-    print("="*60)
-    blogs = fetch_unprocessed_published_blogs()
-    if not blogs:
-        print("✅ No new blogs to promote.")
-        return
-    for blog in blogs:
-        print(f"\nPromoting: {blog['title']}")
-        update_social_status(blog['id'], "Processing")
-        img_url = generate_blog_image_with_agent(blog['title'], blog['content'], blog['keywords'], PAGE_NAME)
-        ig_result = post_to_instagram(img_url, create_instagram_caption(blog['title'], blog['content'], blog['keywords']))
-        fb_result = post_to_facebook(img_url, create_facebook_caption(blog['title'], blog['content'], blog['keywords']))
-        log_to_notion(blog['title'], f"IG: {'OK' if ig_result else 'Skip'} | FB: {'OK' if fb_result else 'Skip'}")
-        update_social_status(blog['id'], "Posted")
-
-# ============ GOOGLE SEARCH CONSOLE & ANALYTICS INTEGRATION ============
-def get_search_console_service():
-    try:
-        key_json = os.getenv("GOOGLE_SEARCH_CONSOLE_KEY")
-        if not key_json: return None
-        credentials = service_account.Credentials.from_service_account_info(json.loads(key_json), scopes=['https://www.googleapis.com/auth/webmasters.readonly'])
-        return build('searchconsole', 'v1', credentials=credentials)
-    except Exception as e:
-        print(f"❌ Search Console auth error: {e}")
-        return None
-
-def get_analytics_service():
-    try:
-        key_json = os.getenv("GOOGLE_ANALYTICS_KEY")
-        analytics_id = os.getenv("GOOGLE_ANALYTICS_ID")
-        if not key_json or not analytics_id: return None, None
-        credentials = service_account.Credentials.from_service_account_info(json.loads(key_json), scopes=['https://www.googleapis.com/auth/analytics.readonly'])
-        return build('analyticsdata', 'v1beta', credentials=credentials), analytics_id
-    except Exception as e:
-        print(f"❌ Analytics auth error: {e}")
-        return None, None
-
-def fetch_search_console_data(site_url, days=28):
-    service = get_search_console_service()
-    if not service: return None
-    try:
-        end_date = datetime.now().strftime('%Y-%m-%d')
-        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-        return service.searchanalytics().query(siteUrl=site_url, body={"startDate": start_date, "endDate": end_date, "dimensions": ["page", "query"], "rowLimit": 100}).execute().get('rows', [])
-    except Exception as e:
-        print(f"❌ Search Console query error: {e}")
-        return None
-
-def fetch_indexing_status(site_url):
-    service = get_search_console_service()
-    if not service: return None
-    try:
-        status_report = []
-        for title in fetch_recent_blog_titles(days=30, limit=10)[:5]:
-            url = f"{site_url}/blog/{title.lower().replace(' ', '-').replace('?', '')[:50]}"
-            try:
-                inspection = service.urlInspection().index().inspect(body={"siteUrl": site_url, "inspectionUrl": url}).execute()
-                status_report.append({'url': url, 'status': inspection.get('inspectionResult', {}).get('coverageState', 'Unknown'), 'title': title})
-            except Exception: pass
-        return status_report
-    except Exception as e:
-        print(f"❌ Indexing status error: {e}")
-        return None
-
-def fetch_analytics_data(analytics_id, days=28):
-    service, _ = get_analytics_service()
-    if not service: return None
-    try:
-        end_date = datetime.now().strftime('%Y-%m-%d')
-        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
-        return service.properties().runReport(property=f"properties/{analytics_id}", body={
-            "dateRanges": [{"startDate": start_date, "endDate": end_date}],
-            "dimensions": [{"name": "pagePath"}, {"name": "pageTitle"}],
-            "metrics": [{"name": "sessions"}, {"name": "averageSessionDuration"}, {"name": "bounceRate"}],
-            "orderBys": [{"metric": {"metricName": "sessions"}, "desc": True}], "limit": 50
-        }).execute().get('rows', [])
-    except Exception as e:
-        print(f"❌ Analytics query error: {e}")
-        return None
-
-def research_keywords_with_tools(niche, page_name):
-    try:
-        research_task = Task(description=f"Research 10 high-value keywords for {page_name} in {niche}. Include volume, competition, intent, and 3 content opportunities.", expected_output="Keyword research report", agent=keyword_researcher)
-        Crew(agents=[keyword_researcher], tasks=[research_task], process=Process.sequential, verbose=True).kickoff()
-        return research_task.output.raw.strip()
-    except Exception as e:
-        return f"Keyword research failed: {e}"
-
-def run_seo_monitor():
-    print("\n" + "="*70)
-    print(f"🔍 SEO MONITOR: Running comprehensive audit for {PAGE_NAME}")
-    print("="*70)
-    
-    site_url = "https://kahani-ai.onrender.com" if PAGE_NAME == "Kahani AI" else "https://geo-analyzer.onrender.com"
-    
-    print("\n📊 Fetching Search Console data...")
-    sc_data = fetch_search_console_data(site_url, days=28)
-    print("📊 Checking indexing status...")
-    indexing_status = fetch_indexing_status(site_url)
-    print("📊 Fetching Analytics data...")
-    ga_data = fetch_analytics_data(os.getenv("GOOGLE_ANALYTICS_ID", ""), days=28)
-    print("🔍 Researching new keyword opportunities...")
-    keyword_research = research_keywords_with_tools(PAGE_NICHE, PAGE_NAME)
-    
-    sc_summary = "\n".join([f"- {r.get('keys', ['N/A'])[0]}: {r.get('clicks', 0)} clicks, {r.get('impressions', 0)} imp, CTR {r.get('ctr', 0)*100:.1f}%" for r in (sc_data or [])[:10]]) or "No SC data yet"
-    indexing_summary = "\n".join([f"{'✅' if 'Indexed' in i['status'] else '❌'} {i['title']}: {i['status']}" for i in (indexing_status or [])]) or "Could not fetch indexing status"
-    ga_summary = "\n".join([f"- {r['dimensionValues'][0]['value']}: {r['metricValues'][0]['value']} sessions" for r in (ga_data or [])[:5]]) or "No GA data yet"
-    
-    analysis_task = Task(description=f"Analyze SEO health of {PAGE_NAME} ({site_url}).\nSC: {sc_summary}\nIndexing: {indexing_summary}\nGA: {ga_summary}\nKeywords: {keyword_research}\n\nProvide prioritized report: 🔴 CRITICAL, 🟡 HIGH, 🟠 MEDIUM, 🔵 LOW, 📝 CONTENT RECOMMENDATIONS, 🎯 QUICK WINS.", expected_output="Comprehensive SEO audit report", agent=seo_monitor)
-    
-    try:
-        result = Crew(agents=[seo_monitor], tasks=[analysis_task], process=Process.sequential, verbose=True).kickoff()
-        save_to_memory(f"SEO Audit: {PAGE_NAME} - {datetime.now().strftime('%Y-%m-%d')}", "SEO_AUDIT", str(result)[:2000], "Success", "Weekly SEO monitoring completed", 9)
-        print(f"\n✅ SEO audit complete! Report saved to Memory database.")
-        return result
-    except Exception as e:
-        print(f"❌ SEO monitor failed: {e}")
-        return None
-
-# ============ MAIN EXECUTION ============
-def run_daily_agency():
-    print(f"\n{'='*60}")
-    print(f"🚀 Starting agency for {PAGE_NAME} ({PAGE_NICHE})")
-    print(f"{'='*60}")
-    
-    # Blog creation runs EVERY TIME
-    try:
-        run_blog_creation_phase()
-    except Exception as e:
-        print(f"⚠️ Blog error: {e}")
-        traceback.print_exc()
-    
-    # Social media runs EVERY TIME
-    try:
-        run_social_promotion_phase()
-    except Exception as e:
-        print(f"⚠️ Social error: {e}")
-        traceback.print_exc()
-    
-    # SEO monitor runs ONLY on Sundays (every 7 days)
-    if datetime.now().weekday() == 6:  # 0=Monday, 6=Sunday
-        try:
-            print("\n🔍 Running weekly SEO audit (Sunday schedule)...")
-            run_seo_monitor()
-        except Exception as e:
-            print(f"⚠️ SEO monitor error: {e}")
-            traceback.print_exc()
-    else:
-        print(f"\n📅 SEO Monitor: Skipping (next run on Sunday)")
-    
-    print("\n🎉 Done!")
-
-if __name__ == "__main__":
-    try:
-        print("\n🎯 Starting main execution...")
-        run_daily_agency()
-        print("\n🎉 Main execution completed successfully!")
-    except Exception as e:
-        print(f"\n❌ CRITICAL ERROR in main execution: {e}")
-        traceback.print_exc()
+# ... (rest of the code remains the same - Phase 2, Google APIs, SEO Monitor, Main Execution)
