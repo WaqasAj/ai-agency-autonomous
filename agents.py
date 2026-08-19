@@ -3,40 +3,39 @@ import requests
 import re
 import time
 import json
+import traceback
 from crewai import Agent, Task, Crew, Process
 from datetime import datetime, timedelta
 import litellm
 
-# ============ THE FIX: Strip cache_breakpoint from every API call ============
+# ============ THE FIX: Strip cache_breakpoint + Retry/Fallback Logic ============
 _original_completion = litellm.completion
 
-def _strip_cache_breakpoint(obj):
-    if isinstance(obj, dict):
-        obj.pop("cache_breakpoint", None)
-        for v in obj.values():
-            _strip_cache_breakpoint(v)
-    elif isinstance(obj, list):
-        for item in obj:
-            _strip_cache_breakpoint(item)
-
 def _patched_completion(*args, **kwargs):
-    _strip_cache_breakpoint(kwargs)
-    # Add retry logic for Mistral failures
+    # 1. Strip cache_breakpoint
+    def _strip(obj):
+        if isinstance(obj, dict):
+            obj.pop("cache_breakpoint", None)
+            for v in obj.values(): _strip(v)
+        elif isinstance(obj, list):
+            for item in obj: _strip(item)
+    _strip(kwargs)
+    
+    # 2. Retry logic with Gemini fallback
     max_retries = 3
     for attempt in range(max_retries):
         try:
             return _original_completion(*args, **kwargs)
         except Exception as e:
-            if "MistralException" in str(e) or "ServiceUnavailable" in str(e):
+            error_str = str(e)
+            if "MistralException" in error_str or "ServiceUnavailable" in error_str or "Connection refused" in error_str:
                 if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 5  # 5s, 10s, 15s
+                    wait_time = (attempt + 1) * 5
                     print(f"⚠️ Mistral API error, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
                     time.sleep(wait_time)
                 else:
-                    print(f"❌ Mistral API failed after {max_retries} attempts. Trying fallback model...")
-                    # Switch to fallback model
-                    if 'model' in kwargs:
-                        kwargs['model'] = 'gemini/gemini-1.5-flash'  # Fallback to Gemini
+                    print(f"❌ Mistral API failed after {max_retries} attempts. Switching to fallback model (Gemini)...")
+                    kwargs['model'] = 'gemini/gemini-1.5-flash'
                     return _original_completion(*args, **kwargs)
             else:
                 raise e
@@ -48,7 +47,7 @@ litellm.completion = _patched_completion
 NOTION_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DB_ID = os.getenv("NOTION_DATABASE_ID")
 MISTRAL_KEY = os.getenv("MISTRAL_API_KEY")
-GEMINI_KEY = os.getenv("GEMINI_API_KEY")  # Add Gemini as fallback
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 FB_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
 FB_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
 IG_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID")
@@ -58,9 +57,8 @@ PAGE_NAME = os.getenv("PAGE_NAME", "Kahani AI")
 PAGE_NICHE = os.getenv("PAGE_NICHE", "general")
 PAGE_DESCRIPTION = os.getenv("PAGE_DESCRIPTION", "")
 
-os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
-if GEMINI_KEY:
-    os.environ["GEMINI_API_KEY"] = GEMINI_KEY
+if MISTRAL_KEY: os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
+if GEMINI_KEY: os.environ["GEMINI_API_KEY"] = GEMINI_KEY
 
 # ============ STARTUP VALIDATION ============
 print(f"\n{'='*70}")
@@ -73,12 +71,9 @@ print(f"   MISTRAL_KEY present: {bool(MISTRAL_KEY)}")
 print(f"   GEMINI_KEY present: {bool(GEMINI_KEY)}")
 print(f"{'='*70}\n")
 
-if not NOTION_KEY:
-    print("❌ CRITICAL: NOTION_API_KEY is not set!")
-if not MISTRAL_KEY:
-    print("❌ CRITICAL: MISTRAL_API_KEY is not set!")
+if not NOTION_KEY: print("❌ CRITICAL: NOTION_API_KEY is not set!")
+if not MISTRAL_KEY: print("❌ CRITICAL: MISTRAL_API_KEY is not set!")
 
-# Test Google API imports
 try:
     from google.oauth2 import service_account
     from googleapiclient.discovery import build
@@ -400,18 +395,13 @@ def run_blog_creation_phase():
         try:
             Crew(agents=[blog_writer, seo_geo_optimizer, ceo_reviewer], tasks=[write_task, seo_task, review_task], process=Process.sequential, verbose=True).kickoff()
         except Exception as e:
-            print(f"❌ Crew execution failed: {e}")
-            # If crew fails, try to salvage what we have
-            if write_task.output:
+            print(f"⚠️ Crew execution failed (likely API rate limit): {e}")
+            # SALVAGE: If the blog was written but SEO/CEO failed, publish it anyway with auto-generated SEO
+            if write_task.output and write_task.output.raw.strip():
+                print("⚠️ Salvaging written blog content and auto-generating SEO...")
                 final_blog_content = write_task.output.raw.strip()
-            if seo_task.output:
-                final_seo_output = seo_task.output.raw.strip()
-            if review_task.output:
-                final_ceo_decision = review_task.output.raw.strip()
-            # If we have content, publish it anyway
-            if final_blog_content and final_title:
-                print("⚠️ Publishing blog despite crew failure...")
-                final_ceo_decision = "DECISION: APPROVED (auto-approved due to API failure)"
+                final_seo_output = f"SLUG: {re.sub(r'[^a-z0-9]+', '-', final_title.lower()).strip('-')[:50]}\nMETA: Discover expert insights on {final_title}.\nKEYWORDS: {PAGE_NICHE}\nGEO_SNIPPETS: Learn more about {final_title}."
+                final_ceo_decision = "DECISION: APPROVED (auto-approved due to API failure salvage)"
                 break
             else:
                 print("❌ No content generated. Cannot publish.")
@@ -441,13 +431,10 @@ def run_blog_creation_phase():
             elif line.startswith("META:"): meta = line.replace("META:", "").strip()
             elif line.startswith("KEYWORDS:"): keywords = line.replace("KEYWORDS:", "").strip()
     
-    # If SEO failed, generate defaults
-    if not slug and final_title:
-        slug = re.sub(r'[^a-z0-9]+', '-', final_title.lower()).strip('-')[:50]
-    if not meta and final_title:
-        meta = f"Discover expert insights on {final_title}. Learn actionable strategies and tips."
-    if not keywords:
-        keywords = PAGE_NICHE
+    # Fallback SEO if missing
+    if not slug and final_title: slug = re.sub(r'[^a-z0-9]+', '-', final_title.lower()).strip('-')[:50]
+    if not meta and final_title: meta = f"Discover expert insights on {final_title}."
+    if not keywords: keywords = PAGE_NICHE
 
     is_approved = "DECISION: APPROVED" in final_ceo_decision.upper() if final_ceo_decision else False
     print(f"\nFinal: {'APPROVED' if is_approved else 'REJECTED'} | Title: {final_title}")
@@ -472,8 +459,9 @@ def run_social_promotion_phase():
     for blog in blogs:
         print(f"\nPromoting: {blog['title']}")
         update_social_status(blog['id'], "Processing")
-        ig_result = post_to_instagram(generate_blog_image_with_agent(blog['title'], blog['content'], blog['keywords'], PAGE_NAME), create_instagram_caption(blog['title'], blog['content'], blog['keywords']))
-        fb_result = post_to_facebook(generate_blog_image_with_agent(blog['title'], blog['content'], blog['keywords'], PAGE_NAME), create_facebook_caption(blog['title'], blog['content'], blog['keywords']))
+        img_url = generate_blog_image_with_agent(blog['title'], blog['content'], blog['keywords'], PAGE_NAME)
+        ig_result = post_to_instagram(img_url, create_instagram_caption(blog['title'], blog['content'], blog['keywords']))
+        fb_result = post_to_facebook(img_url, create_facebook_caption(blog['title'], blog['content'], blog['keywords']))
         log_to_notion(blog['title'], f"IG: {'OK' if ig_result else 'Skip'} | FB: {'OK' if fb_result else 'Skip'}")
         update_social_status(blog['id'], "Posted")
 
@@ -591,24 +579,21 @@ def run_daily_agency():
         run_blog_creation_phase()
     except Exception as e:
         print(f"⚠️ Blog error: {e}")
-        import traceback
         traceback.print_exc()
     
     try:
         run_social_promotion_phase()
     except Exception as e:
         print(f"⚠️ Social error: {e}")
-        import traceback
         traceback.print_exc()
     
-    # Run SEO monitor (Set to True for testing, change to datetime.now().weekday() == 6 for Sundays only)
-    if True:
+    # Run SEO monitor (Set to True for testing. Change to: datetime.now().weekday() == 6 for Sundays only)
+    if True: 
         try:
             print("\n🔍 Running SEO audit...")
             run_seo_monitor()
         except Exception as e:
             print(f"⚠️ SEO monitor error: {e}")
-            import traceback
             traceback.print_exc()
     
     print("\n🎉 Done!")
@@ -620,5 +605,4 @@ if __name__ == "__main__":
         print("\n🎉 Main execution completed successfully!")
     except Exception as e:
         print(f"\n❌ CRITICAL ERROR in main execution: {e}")
-        import traceback
         traceback.print_exc()
