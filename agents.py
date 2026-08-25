@@ -408,19 +408,136 @@ def post_to_facebook(image_url, caption):
 # ============ DEFINE AGENTS ============
 FREE_MODEL = "mistral/mistral-small-latest"
 
-trend_researcher = Agent(role=f"Senior Content Strategist for {PAGE_NAME}", goal=f"Identify UNIQUE, HIGH-VALUE blog topics that solve REAL problems for {PAGE_NAME}'s audience", backstory=f"You are a veteran content strategist with 15 years of experience in the {PAGE_NICHE} niche.\n\n{BRAND_CONTEXT}\n\nYOUR EXPERTISE:\n- You find CONTENT GAPS where people are searching but finding poor answers\n- You understand what makes content go viral in this specific niche\n- You know the difference between generic topics and SPECIFIC, actionable ones\n\nCRITICAL OUTPUT RULE:\nYou MUST output ONLY a short blog title (under 100 characters).\nDO NOT output descriptions, explanations, or paragraphs.\nDO NOT output bullet points or multiple topics.\nOUTPUT FORMAT: Just the title, nothing else.\n\nEXAMPLES OF GOOD OUTPUT:\n✅ \"How Personalized Bedtime Stories Helped My 4-Year-Old Overcome Sleep Anxiety\"\n✅ \"Why Your SEO Strategy is Failing in the Age of ChatGPT\"\n❌ \"Here's a great topic about bedtime stories. The angle is...\" (WRONG - too long)\n❌ \"Topic 1: Stories\nTopic 2: SEO\" (WRONG - multiple topics)\n\nYou will receive recent topics. You MUST suggest something COMPLETELY DIFFERENT.", llm=FREE_MODEL, verbose=True)
+trend_researcher = Agent(
+    role=f"Senior Content Strategist for {PAGE_NAME}",
+    goal=f"Identify UNIQUE, HIGH-VALUE blog topics that solve REAL problems for {PAGE_NAME}'s audience",
+    backstory=f"""You are a veteran content strategist with 15 years of experience in the {PAGE_NICHE} niche.
 
-blog_writer = Agent(role=f"Expert Blog Writer for {PAGE_NAME}", goal=f"Write {PAGE_NICHE} blog posts that feel like they were written by a trusted expert", backstory=f"You are a master storyteller and {PAGE_NICHE} expert writing specifically for {PAGE_NAME}.\n\n{BRAND_CONTEXT}\n\n{HUMANIZATION_RULES}\n\nYOUR WRITING PROCESS:\n1. Start with a HOOK that grabs attention in the first 2 sentences\n2. Establish the PROBLEM with specific, relatable examples\n3. Present the SOLUTION with step-by-step actionable advice\n4. Include REAL case studies or examples (use specific numbers and details)\n5. Address COMMON MISTAKES people make\n6. End with a clear TAKEAWAY or call-to-action\n\nSTRUCTURE (1,500-2,000 words):\n## Hook (grab attention)\n## The Problem (make it relatable)\n## The Solution (step-by-step)\n## Real Examples (specific case studies)\n## Common Mistakes (what to avoid)\n## FAQ Section (answer real questions)\n## Conclusion (clear takeaway)\n\nQUALITY CHECKLIST (before submitting):\n- Does it sound like a REAL person wrote it? (not AI)\n- Are there SPECIFIC examples with numbers? (not generic)\n- Does it naturally mention {PAGE_NAME} without being salesy? (1-2 times max)\n- Would a reader in the {PAGE_NICHE} niche find this VALUABLE?\n- Is it FREE of AI clichés? (no \"delve\", \"tapestry\", \"journey\", etc.)\n\nWrite for HUMANS first, search engines second.", llm=FREE_MODEL, verbose=True)
+{BRAND_CONTEXT}
 
-seo_geo_optimizer = Agent(role="SEO & GEO Specialist", goal="Optimize content for Google AND AI search engines", backstory="You optimize content for both traditional search and AI engines (ChatGPT, Perplexity, Gemini).\n\nYOUR EXPERTISE:\n- Traditional SEO: keywords, meta tags, structure\n- GEO (Generative Engine Optimization): making content AI-friendly\n- Schema markup, FAQ optimization, featured snippets\n\nOUTPUT EXACT FORMAT:\nSLUG: [url-friendly-slug]\nMETA: [compelling meta description under 155 chars with keyword and CTA]\nKEYWORDS: [primary keyword, variation 1, variation 2, ...]\nGEO_SNIPPETS: [Direct answer 1] | [Direct answer 2]", llm=FREE_MODEL, verbose=True)
+YOUR EXPERTISE:
+- You find CONTENT GAPS where people are searching but finding poor answers
+- You understand what makes content go viral in this specific niche
+- You know the difference between generic topics and SPECIFIC, actionable ones
 
-ceo_reviewer = Agent(role=f"Chief Content Officer for {PAGE_NAME}", goal=f"Maintain the HIGHEST quality standards. Only approve truly excellent content.", backstory=f"You are the final quality gatekeeper for {PAGE_NAME}.\n\n{BRAND_CONTEXT}\n\nYOUR STANDARDS (BE STRICT):\n1. HUMANIZATION (40%): Does it sound like a REAL expert wrote it? Reject if it sounds AI-generated.\n2. RELEVANCE (30%): Does it directly relate to {PAGE_NAME}'s niche and audience? Reject if off-topic.\n3. ORIGINALITY (20%): Is this a FRESH angle or just rehashed info? Reject if generic.\n4. VALUE (10%): Does it provide ACTIONABLE insights? Reject if it's just fluff.\n\nDUPLICATE CHECK: If this topic was covered in the last 30 days with the SAME angle, REJECT.\n\nBE HARSH. Only approve content you'd be proud to publish under the {PAGE_NAME} brand.\n\nOutput EXACT format:\nDECISION: APPROVED or REJECTED\nSCORE: X/10\nREASONS: [specific issues - be detailed]\nFIXES_NEEDED: [exact changes required - only if REJECTED]", llm=FREE_MODEL, verbose=True)
+CRITICAL OUTPUT RULE:
+You MUST output ONLY a short blog title (under 100 characters).
+DO NOT output descriptions, explanations, or paragraphs.
+DO NOT output bullet points or multiple topics.
+OUTPUT FORMAT: Just the title, nothing else.
 
-image_prompt_creator = Agent(role="Image Prompt Creator", goal="Create short, realistic photography prompts for blog images", backstory="Create SHORT prompts (under 200 chars) for REALISTIC photographs. Never cartoon or anime.", llm=FREE_MODEL, verbose=True)
+EXAMPLES OF GOOD OUTPUT:
+✅ "How Personalized Bedtime Stories Helped My 4-Year-Old Overcome Sleep Anxiety"
+✅ "Why Your SEO Strategy is Failing in the Age of ChatGPT"
+❌ "Here's a great topic about bedtime stories. The angle is..." (WRONG - too long)
+❌ "Topic 1: Stories\nTopic 2: SEO" (WRONG - multiple topics)
 
-keyword_researcher = Agent(role="SEO Keyword Research Specialist", goal="Find high-value, low-competition keywords", backstory="You are an expert keyword researcher. Find long-tail keywords with commercial intent and low competition.", llm=FREE_MODEL, verbose=True)
+You will receive recent topics and SEO priorities. You MUST suggest something COMPLETELY DIFFERENT that aligns with the SEO strategy.""",
+    llm=FREE_MODEL, verbose=True
+)
 
-seo_monitor = Agent(role="Chief SEO & Performance Officer", goal="Monitor website health and provide actionable recommendations", backstory="You are a world-class SEO specialist. Provide data-driven recommendations with clear priority levels: 🔴 CRITICAL, 🟡 HIGH, 🟠 MEDIUM, 🔵 LOW.", llm=FREE_MODEL, verbose=True)
+blog_writer = Agent(
+    role=f"Expert Blog Writer for {PAGE_NAME}",
+    goal=f"Write {PAGE_NICHE} blog posts that feel like they were written by a trusted expert",
+    backstory=f"""You are a master storyteller and {PAGE_NICHE} expert writing specifically for {PAGE_NAME}.
+
+{BRAND_CONTEXT}
+
+{HUMANIZATION_RULES}
+
+YOUR WRITING PROCESS:
+1. Start with a HOOK that grabs attention in the first 2 sentences
+2. Establish the PROBLEM with specific, relatable examples
+3. Present the SOLUTION with step-by-step actionable advice
+4. Include REAL case studies or examples (use specific numbers and details)
+5. Address COMMON MISTAKES people make
+6. End with a clear TAKEAWAY or call-to-action
+
+STRUCTURE (1,500-2,000 words):
+## Hook (grab attention)
+## The Problem (make it relatable)
+## The Solution (step-by-step)
+## Real Examples (specific case studies)
+## Common Mistakes (what to avoid)
+## FAQ Section (answer real questions)
+## Conclusion (clear takeaway)
+
+QUALITY CHECKLIST (before submitting):
+- Does it sound like a REAL person wrote it? (not AI)
+- Are there SPECIFIC examples with numbers? (not generic)
+- Does it naturally mention {PAGE_NAME} without being salesy? (1-2 times max)
+- Does it target the keywords specified in the SEO brief?
+- Would a reader in the {PAGE_NICHE} niche find this VALUABLE?
+- Is it FREE of AI clichés? (no "delve", "tapestry", "journey", etc.)
+
+Write for HUMANS first, search engines second.""",
+    llm=FREE_MODEL, verbose=True
+)
+
+seo_geo_optimizer = Agent(
+    role="SEO & GEO Specialist",
+    goal="Optimize content for Google AND AI search engines",
+    backstory="""You optimize content for both traditional search and AI engines (ChatGPT, Perplexity, Gemini).
+
+YOUR EXPERTISE:
+- Traditional SEO: keywords, meta tags, structure
+- GEO (Generative Engine Optimization): making content AI-friendly
+- Schema markup, FAQ optimization, featured snippets
+
+OUTPUT EXACT FORMAT:
+SLUG: [url-friendly-slug]
+META: [compelling meta description under 155 chars with keyword and CTA]
+KEYWORDS: [primary keyword, variation 1, variation 2, ...]
+GEO_SNIPPETS: [Direct answer 1] | [Direct answer 2]""",
+    llm=FREE_MODEL, verbose=True
+)
+
+ceo_reviewer = Agent(
+    role=f"Chief Content Officer for {PAGE_NAME}",
+    goal=f"Maintain the HIGHEST quality standards AND ensure strict alignment with SEO strategy.",
+    backstory=f"""You are the final quality gatekeeper for {PAGE_NAME}.
+
+{BRAND_CONTEXT}
+
+YOUR STANDARDS (BE STRICT):
+1. SEO ALIGNMENT (40%): Does the post target the keywords/topics specified in the latest SEO audit? Does it address content gaps? Reject if it ignores SEO priorities.
+2. HUMANIZATION (30%): Does it sound like a REAL expert wrote it? Reject if it sounds AI-generated.
+3. RELEVANCE (15%): Does it directly relate to {PAGE_NAME}'s niche and audience? Reject if off-topic.
+4. VALUE (15%): Does it provide ACTIONABLE insights? Reject if it's just fluff.
+
+DUPLICATE CHECK: If this topic was covered in the last 30 days with the SAME angle, REJECT.
+
+BE HARSH. Only approve content you'd be proud to publish under the {PAGE_NAME} brand that will actually rank in search engines.
+
+Output EXACT format:
+DECISION: APPROVED or REJECTED
+SCORE: X/10
+SEO_ALIGNMENT_SCORE: X/10
+REASONS: [specific issues - be detailed]
+FIXES_NEEDED: [exact changes required - only if REJECTED]""",
+    llm=FREE_MODEL, verbose=True
+)
+
+image_prompt_creator = Agent(
+    role="Image Prompt Creator",
+    goal="Create short, realistic photography prompts for blog images",
+    backstory="Create SHORT prompts (under 200 chars) for REALISTIC photographs. Never cartoon or anime.",
+    llm=FREE_MODEL, verbose=True
+)
+
+keyword_researcher = Agent(
+    role="SEO Keyword Research Specialist",
+    goal="Find high-value, low-competition keywords",
+    backstory="You are an expert keyword researcher. Find long-tail keywords with commercial intent and low competition.",
+    llm=FREE_MODEL, verbose=True
+)
+
+seo_monitor = Agent(
+    role="Chief SEO & Performance Officer",
+    goal="Monitor website health and provide actionable recommendations",
+    backstory="You are a world-class SEO specialist. Provide data-driven recommendations with clear priority levels: 🔴 CRITICAL, 🟡 HIGH, 🟠 MEDIUM, 🔵 LOW.",
+    llm=FREE_MODEL, verbose=True
+)
 
 # ============ PHASE 1: BLOG CREATION ============
 def run_blog_creation_phase():
@@ -437,7 +554,9 @@ def run_blog_creation_phase():
     recent_text = "\n".join([f"- {t}" for t in recent_titles]) if recent_titles else "No recent posts"
     print(f"\n📋 Recent topics (last 30 days): {len(recent_titles)} posts")
 
+    # Fetch SEO and Keyword memories to guide the entire process
     seo_memories = fetch_relevant_memories(memory_type="SEO_AUDIT", limit=2)
+    keyword_memories = fetch_relevant_memories(memory_type="KEYWORD_RESEARCH", limit=2)
     failure_memories = fetch_relevant_memories(outcome="Failure", limit=3)
     success_memories = fetch_relevant_memories(outcome="Success", limit=3)
 
@@ -507,17 +626,40 @@ def run_blog_creation_phase():
         print(f"\n[Step 3] SEO/GEO optimization...")
         seo_task = Task(description="Create: SLUG, META, KEYWORDS, GEO_SNIPPETS", expected_output="SEO elements", agent=seo_geo_optimizer)
 
-        print(f"\n[Step 4] CEO review (STRICT STANDARDS)...")
+        print(f"\n[Step 4] CEO review (STRICT STANDARDS + SEO ALIGNMENT)...")
+        
+        # Build SEO and Keyword context for the CEO
+        seo_context_for_ceo = ""
+        if seo_memories:
+            seo_context_for_ceo += "\n\n📊 LATEST SEO AUDIT PRIORITIES (from SEO Monitor):\n"
+            for mem in seo_memories[:1]:
+                seo_context_for_ceo += f"{mem['content'][:800]}...\n"
+        
+        keyword_context_for_ceo = ""
+        if keyword_memories:
+            keyword_context_for_ceo += "\n\n🎯 TARGET KEYWORDS (from Keyword Research):\n"
+            for mem in keyword_memories[:1]:
+                keyword_context_for_ceo += f"{mem['content'][:600]}...\n"
+
         strategy_ctx = f"\nStrategy: {strategy['goal']}. Audience: {strategy['target_audience']}." if strategy else ""
+        
         review_desc = (
             f"Review this blog post for {PAGE_NAME} with STRICT standards.\n\n"
             f"RECENT TOPICS (check for duplicates):\n{recent_text}\n\n"
-            f"If this is a duplicate (same topic + same angle), REJECT.\n"
+            f"{seo_context_for_ceo}"
+            f"{keyword_context_for_ceo}"
+            f"{strategy_ctx}\n\n"
+            f"REVIEW CRITERIA:\n"
+            f"1. SEO ALIGNMENT (40%): Does the post target keywords/topics specified in the SEO audit above? Reject if it ignores SEO priorities.\n"
+            f"2. HUMANIZATION (30%): Does it sound like a REAL expert wrote it? Reject if it sounds AI-generated.\n"
+            f"3. RELEVANCE (15%): Does it directly relate to {PAGE_NAME}'s niche and audience?\n"
+            f"4. VALUE (15%): Does it provide ACTIONABLE insights?\n\n"
+            f"If the blog ignores SEO priorities or targets low-value topics, REJECT with specific fixes.\n"
             f"If it's off-topic or sounds AI-generated, REJECT.\n"
-            f"Only APPROVE if it's genuinely excellent.{strategy_ctx}\n\n"
-            "Output: DECISION, SCORE, REASONS, FIXES_NEEDED"
+            f"Only APPROVE if it's genuinely excellent AND SEO-aligned.\n\n"
+            "Output EXACT format:\nDECISION: APPROVED or REJECTED\nSCORE: X/10\nSEO_ALIGNMENT_SCORE: X/10\nREASONS: [specific issues]\nFIXES_NEEDED: [exact changes required - only if REJECTED]"
         )
-        review_task = Task(description=review_desc, expected_output="DECISION, SCORE, REASONS, FIXES_NEEDED", agent=ceo_reviewer)
+        review_task = Task(description=review_desc, expected_output="DECISION, SCORE, SEO_ALIGNMENT_SCORE, REASONS, FIXES_NEEDED", agent=ceo_reviewer)
 
         try:
             Crew(agents=[blog_writer, seo_geo_optimizer, ceo_reviewer], tasks=[write_task, seo_task, review_task], process=Process.sequential, verbose=True).kickoff()
@@ -704,6 +846,11 @@ def run_seo_monitor():
     try:
         result = Crew(agents=[seo_monitor], tasks=[analysis_task], process=Process.sequential, verbose=True).kickoff()
         save_to_memory(f"SEO Audit: {PAGE_NAME} - {datetime.now().strftime('%Y-%m-%d')}", "SEO_AUDIT", str(result)[:2000], "Success", "Weekly SEO monitoring completed", 9)
+        
+        # Save keyword research separately for easy access by other agents
+        if keyword_research and not keyword_research.startswith("Keyword research failed"):
+            save_to_memory(f"Keyword Research: {PAGE_NAME} - {datetime.now().strftime('%Y-%m-%d')}", "KEYWORD_RESEARCH", keyword_research[:2000], "Success", "Keyword opportunities identified", 8)
+            
         print(f"\n✅ SEO audit complete! Report saved to Memory database.")
         return result
     except Exception as e:
