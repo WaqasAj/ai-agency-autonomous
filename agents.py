@@ -8,7 +8,7 @@ from crewai import Agent, Task, Crew, Process
 from datetime import datetime, timedelta
 import litellm
 
-# ============ THE FIX: Strip cache_breakpoint + Retry/Fallback Logic ============
+# ============ THE FIX: Strip cache_breakpoint + Reliable Retry Logic ============
 _original_completion = litellm.completion
 
 def _patched_completion(*args, **kwargs):
@@ -28,15 +28,14 @@ def _patched_completion(*args, **kwargs):
             return _original_completion(*args, **kwargs)
         except Exception as e:
             error_str = str(e)
-            if "MistralException" in error_str or "ServiceUnavailable" in error_str or "Connection refused" in error_str:
+            if "ServiceUnavailable" in error_str or "Connection refused" in error_str or "MistralException" in error_str:
                 if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 5
-                    print(f"⚠️ Mistral API error, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
+                    print(f"⚠️ API error, retrying in {wait_time}s... (attempt {attempt + 1}/{max_retries})")
                     time.sleep(wait_time)
                 else:
-                    print(f"❌ Mistral API failed after {max_retries} attempts. Switching to fallback model (Gemini)...")
-                    kwargs['model'] = 'gemini/gemini-1.5-flash'
-                    return _original_completion(*args, **kwargs)
+                    print(f"❌ API failed after {max_retries} attempts.")
+                    raise e
             else:
                 raise e
 
@@ -57,10 +56,10 @@ PAGE_NAME = os.getenv("PAGE_NAME", "Kahani AI")
 PAGE_NICHE = os.getenv("PAGE_NICHE", "general")
 PAGE_DESCRIPTION = os.getenv("PAGE_DESCRIPTION", "")
 
-if MISTRAL_KEY:
-    os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
 if GEMINI_KEY:
     os.environ["GEMINI_API_KEY"] = GEMINI_KEY
+if MISTRAL_KEY:
+    os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
 
 # ============ STARTUP VALIDATION ============
 print(f"\n{'='*70}")
@@ -69,14 +68,13 @@ print(f"   PAGE_NAME: {PAGE_NAME}")
 print(f"   PAGE_NICHE: {PAGE_NICHE}")
 print(f"   PAGE_DESCRIPTION: {PAGE_DESCRIPTION[:50] if PAGE_DESCRIPTION else 'None'}")
 print(f"   NOTION_KEY present: {bool(NOTION_KEY)}")
-print(f"   MISTRAL_KEY present: {bool(MISTRAL_KEY)}")
 print(f"   GEMINI_KEY present: {bool(GEMINI_KEY)}")
 print(f"{'='*70}\n")
 
 if not NOTION_KEY:
     print("❌ CRITICAL: NOTION_API_KEY is not set!")
-if not MISTRAL_KEY:
-    print("❌ CRITICAL: MISTRAL_API_KEY is not set!")
+if not GEMINI_KEY:
+    print("❌ CRITICAL: GEMINI_API_KEY is not set!")
 
 try:
     from google.oauth2 import service_account
@@ -159,7 +157,6 @@ def clean_title(title):
     cleaned = re.sub(r'[\s\*"\']+$', '', cleaned)
     cleaned = cleaned.strip()
     
-    # CRITICAL: Truncate to 150 chars max (well under Notion's 2000 limit)
     if len(cleaned) > 150:
         cleaned = cleaned[:147] + "..."
         print(f"⚠️ Title was too long, truncated to: {cleaned}")
@@ -302,7 +299,6 @@ def create_notion_page_with_body(title, content, slug, meta_description, keyword
     url = "https://api.notion.com/v1/pages"
     clean_t = clean_title(title)
     
-    # CRITICAL: Final safety check - ensure title is under 2000 chars
     if len(clean_t) > 2000:
         print(f"⚠️ Title still too long ({len(clean_t)} chars), truncating to 1997...")
         clean_t = clean_t[:1997] + "..."
@@ -406,7 +402,8 @@ def post_to_facebook(image_url, caption):
     return res.json().get("id") if res.status_code == 200 else None
 
 # ============ DEFINE AGENTS ============
-FREE_MODEL = "mistral/mistral-small-latest"
+# 🚀 CHANGED: Using Gemini as the primary reliable model
+FREE_MODEL = "gemini/gemini-1.5-flash-latest"
 
 trend_researcher = Agent(
     role=f"Senior Content Strategist for {PAGE_NAME}",
@@ -554,7 +551,6 @@ def run_blog_creation_phase():
     recent_text = "\n".join([f"- {t}" for t in recent_titles]) if recent_titles else "No recent posts"
     print(f"\n📋 Recent topics (last 30 days): {len(recent_titles)} posts")
 
-    # Fetch SEO and Keyword memories to guide the entire process
     seo_memories = fetch_relevant_memories(memory_type="SEO_AUDIT", limit=2)
     keyword_memories = fetch_relevant_memories(memory_type="KEYWORD_RESEARCH", limit=2)
     failure_memories = fetch_relevant_memories(outcome="Failure", limit=3)
@@ -628,7 +624,6 @@ def run_blog_creation_phase():
 
         print(f"\n[Step 4] CEO review (STRICT STANDARDS + SEO ALIGNMENT)...")
         
-        # Build SEO and Keyword context for the CEO
         seo_context_for_ceo = ""
         if seo_memories:
             seo_context_for_ceo += "\n\n📊 LATEST SEO AUDIT PRIORITIES (from SEO Monitor):\n"
@@ -847,7 +842,6 @@ def run_seo_monitor():
         result = Crew(agents=[seo_monitor], tasks=[analysis_task], process=Process.sequential, verbose=True).kickoff()
         save_to_memory(f"SEO Audit: {PAGE_NAME} - {datetime.now().strftime('%Y-%m-%d')}", "SEO_AUDIT", str(result)[:2000], "Success", "Weekly SEO monitoring completed", 9)
         
-        # Save keyword research separately for easy access by other agents
         if keyword_research and not keyword_research.startswith("Keyword research failed"):
             save_to_memory(f"Keyword Research: {PAGE_NAME} - {datetime.now().strftime('%Y-%m-%d')}", "KEYWORD_RESEARCH", keyword_research[:2000], "Success", "Keyword opportunities identified", 8)
             
@@ -875,8 +869,7 @@ def run_daily_agency():
         print(f"⚠️ Social error: {e}")
         traceback.print_exc()
     
-    # SEO monitor runs ONLY on Sundays (every 7 days)
-    if datetime.now().weekday() == 6:  # 0=Monday, 6=Sunday
+    if datetime.now().weekday() == 6:
         try:
             print("\n🔍 Running weekly SEO audit (Sunday schedule)...")
             run_seo_monitor()
