@@ -47,6 +47,7 @@ NOTION_KEY = os.getenv("NOTION_API_KEY")
 NOTION_DB_ID = os.getenv("NOTION_DATABASE_ID")
 MISTRAL_KEY = os.getenv("MISTRAL_API_KEY")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_KEY = os.getenv("GROQ_API_KEY")
 FB_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
 FB_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
 IG_ACCOUNT_ID = os.getenv("INSTAGRAM_ACCOUNT_ID")
@@ -60,6 +61,8 @@ if GEMINI_KEY:
     os.environ["GEMINI_API_KEY"] = GEMINI_KEY
 if MISTRAL_KEY:
     os.environ["MISTRAL_API_KEY"] = MISTRAL_KEY
+if GROQ_KEY:
+    os.environ["GROQ_API_KEY"] = GROQ_KEY
 
 # ============ STARTUP VALIDATION ============
 print(f"\n{'='*70}")
@@ -402,8 +405,8 @@ def post_to_facebook(image_url, caption):
     return res.json().get("id") if res.status_code == 200 else None
 
 # ============ DEFINE AGENTS ============
-# 🚀 CHANGED: Using Gemini as the primary reliable model
-FREE_MODEL = "gemini/gemini-1.5-flash-latest"
+# 🚀 CHANGED: Using Groq (free, ultra-fast, no CrewAI dependency issues)
+FREE_MODEL = "groq/llama-3.3-70b-versatile"
 
 trend_researcher = Agent(
     role=f"Senior Content Strategist for {PAGE_NAME}",
