@@ -72,6 +72,7 @@ print(f"   PAGE_NICHE: {PAGE_NICHE}")
 print(f"   PAGE_DESCRIPTION: {PAGE_DESCRIPTION[:50] if PAGE_DESCRIPTION else 'None'}")
 print(f"   NOTION_KEY present: {bool(NOTION_KEY)}")
 print(f"   GEMINI_KEY present: {bool(GEMINI_KEY)}")
+print(f"   GROQ_KEY present: {bool(GROQ_KEY)}")
 print(f"{'='*70}\n")
 
 if not NOTION_KEY:
