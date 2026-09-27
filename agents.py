@@ -407,7 +407,7 @@ def post_to_facebook(image_url, caption):
 
 # ============ DEFINE AGENTS ============
 # 🚀 CHANGED: Using Groq (free, ultra-fast, no CrewAI dependency issues)
-FREE_MODEL = "openai/gpt-oss-120b"
+FREE_MODEL = "groq/openai/gpt-oss-120b"
 
 trend_researcher = Agent(
     role=f"Senior Content Strategist for {PAGE_NAME}",
